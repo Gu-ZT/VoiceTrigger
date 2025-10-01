@@ -66,7 +66,7 @@ public class VoiceBindsList extends ContainerObjectSelectionList<VoiceBindsList.
     }
 
     public void refreshEntries() {
-        this.children().forEach(VoiceBindsList.Entry::refreshEntry);
+        this.children().forEach(Entry::refreshEntry);
     }
 
     public int getRowWidth() {
@@ -74,7 +74,12 @@ public class VoiceBindsList extends ContainerObjectSelectionList<VoiceBindsList.
     }
 
     @OnlyIn(Dist.CLIENT)
-    public class CategoryEntry extends VoiceBindsList.Entry {
+    public abstract static class Entry extends ContainerObjectSelectionList.Entry<Entry> {
+        abstract void refreshEntry();
+    }
+
+    @OnlyIn(Dist.CLIENT)
+    public class CategoryEntry extends Entry {
         final Component name;
         private final int width;
 
@@ -121,7 +126,7 @@ public class VoiceBindsList extends ContainerObjectSelectionList<VoiceBindsList.
                 }
 
                 public void updateNarration(@NotNull NarrationElementOutput p_344973_) {
-                    p_344973_.add(NarratedElementType.TITLE, VoiceBindsList.CategoryEntry.this.name);
+                    p_344973_.add(NarratedElementType.TITLE, CategoryEntry.this.name);
                 }
             });
         }
@@ -131,12 +136,7 @@ public class VoiceBindsList extends ContainerObjectSelectionList<VoiceBindsList.
     }
 
     @OnlyIn(Dist.CLIENT)
-    public abstract static class Entry extends ContainerObjectSelectionList.Entry<VoiceBindsList.Entry> {
-        abstract void refreshEntry();
-    }
-
-    @OnlyIn(Dist.CLIENT)
-    public class KeyEntry extends VoiceBindsList.Entry {
+    public class KeyEntry extends Entry {
         private static final Component RECORD_BUTTON_TITLE = Component.translatable("controls.record");
         private static final int PADDING = 10;
         private final KeyMapping key;
@@ -149,7 +149,7 @@ public class VoiceBindsList extends ContainerObjectSelectionList<VoiceBindsList.
             this.name = name;
             this.showButton = Button.builder(
                     name,
-                    (p_345593_) -> {
+                    (button) -> {
                     }
                 )
                 .bounds(0, 0, 75, 20)
@@ -157,7 +157,7 @@ public class VoiceBindsList extends ContainerObjectSelectionList<VoiceBindsList.
             this.showButton.active = false;
             this.recordButton = Button.builder(
                     RECORD_BUTTON_TITLE,
-                    (p_345591_) -> {
+                    (button) -> {
                     }
                 )
                 .bounds(0, 0, 50, 20)
