@@ -1,0 +1,6 @@
+{
+  "screen.voice_trigger.binding": "Voice Binding",
+  "key.voice_trigger.voice_binding": "VoiceBinding",
+  "key.categories.voice_trigger": "VoiceTrigger",
+  "controls.record": "Record"
+}
