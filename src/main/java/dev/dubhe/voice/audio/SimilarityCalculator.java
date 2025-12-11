@@ -33,4 +33,26 @@ public class SimilarityCalculator {
         }
         return Math.sqrt(sum);
     }
+
+    public double cosineSimilarity(double[] vec1, double[] vec2) {
+        if (vec1.length != vec2.length) {
+            throw new IllegalArgumentException("Vectors must have same length");
+        }
+
+        double dotProduct = 0;
+        double norm1 = 0;
+        double norm2 = 0;
+
+        for (int i = 0; i < vec1.length; i++) {
+            dotProduct += vec1[i] * vec2[i];
+            norm1 += vec1[i] * vec1[i];
+            norm2 += vec2[i] * vec2[i];
+        }
+
+        if (norm1 == 0 || norm2 == 0) {
+            return 0;
+        }
+
+        return dotProduct / (Math.sqrt(norm1) * Math.sqrt(norm2));
+    }
 }

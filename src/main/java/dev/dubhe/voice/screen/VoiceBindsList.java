@@ -193,6 +193,8 @@ public class VoiceBindsList extends ContainerObjectSelectionList<VoiceBindsList.
             if (this.mfccFeatures == null) return;
             double analyzed = event.analyzeBuffer(mfccFeatures);
             VoiceTrigger.LOGGER.info("Key: {}, Analyzed: {}", key.getKey().getName(), analyzed);
+            analyzed = event.analyzeBuffer2(mfccFeatures);
+            VoiceTrigger.LOGGER.info("Key: {}, Analyzed2: {}", key.getKey().getName(), analyzed);
         }
 
         private void handleRecordButtonPress() {
