@@ -17,7 +17,6 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
-import org.jetbrains.annotations.NotNull;
 import org.lwjgl.glfw.GLFW;
 
 import javax.annotation.Nullable;
@@ -54,6 +53,9 @@ public class VoiceBindsScreen extends Screen {
     }
 
     protected void addContents() {
+        if (this.minecraft == null) {
+            return;
+        }
         this.keyBindsList = this.layout.addToContents(new VoiceBindsList(this, this.minecraft));
     }
 
@@ -145,7 +147,7 @@ public class VoiceBindsScreen extends Screen {
     }
 
     @Override
-    public void render(@NotNull GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
+    public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
         super.render(guiGraphics, mouseX, mouseY, partialTick);
     }
 
@@ -157,7 +159,7 @@ public class VoiceBindsScreen extends Screen {
     );
 
     @SubscribeEvent
-    public static void registerKeyMapping(@NotNull RegisterKeyMappingsEvent event) {
+    public static void registerKeyMapping(RegisterKeyMappingsEvent event) {
         event.register(VOICE_BINDING);
     }
 

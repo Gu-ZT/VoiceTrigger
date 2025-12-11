@@ -2,5 +2,7 @@
   "screen.voice_trigger.binding": "Voice Binding",
   "key.voice_trigger.voice_binding": "VoiceBinding",
   "key.categories.voice_trigger": "VoiceTrigger",
-  "controls.record": "Record"
+  "controls.record": "Record",
+  "controls.stop_recording": "Stop",
+  "controls.bound": "Bound"
 }
