@@ -23,29 +23,40 @@ import javax.annotation.Nullable;
 
 @EventBusSubscriber(modid = VoiceTrigger.MOD_ID)
 public class VoiceBindsScreen extends Screen {
-    private VoiceBindsList keyBindsList;
+    public static final KeyMapping VOICE_BINDING = new KeyMapping(
+        "key.voice_trigger.voice_binding",
+        InputConstants.Type.KEYSYM,
+        GLFW.GLFW_KEY_B,
+        "key.categories.voice_trigger"
+    );
+    public final HeaderAndFooterLayout layout = new HeaderAndFooterLayout(this);
+    protected final Options options;
     @Nullable
     public KeyMapping selectedKey;
     public long lastKeySelection;
-    public final HeaderAndFooterLayout layout = new HeaderAndFooterLayout(this);
+    private VoiceBindsList keyBindsList;
     private InputConstants.Key lastPressedKey = InputConstants.UNKNOWN;
     private InputConstants.Key lastPressedModifier = InputConstants.UNKNOWN;
     private boolean isLastKeyHeldDown = false;
     private boolean isLastModifierHeldDown = false;
-    protected final Options options;
 
     protected VoiceBindsScreen() {
         super(Component.translatable("screen.voice_trigger.binding"));
         this.options = Minecraft.getInstance().options;
     }
 
-    @Override
-    protected void init() {
-        this.addTitle();
-        this.addContents();
-        this.addFooter();
-        this.layout.visitWidgets(this::addRenderableWidget);
-        this.repositionElements();
+    @SubscribeEvent
+    public static void registerKeyMapping(RegisterKeyMappingsEvent event) {
+        event.register(VOICE_BINDING);
+    }
+
+    @SubscribeEvent
+    public static void onKeyPress(ClientTickEvent.Post event) {
+        Minecraft client = Minecraft.getInstance();
+        if (client.level == null) return;
+        if (VOICE_BINDING.consumeClick()) {
+            client.setScreen(new VoiceBindsScreen());
+        }
     }
 
     protected void addTitle() {
@@ -65,12 +76,6 @@ public class VoiceBindsScreen extends Screen {
     }
 
     @Override
-    protected void repositionElements() {
-        this.layout.arrangeElements();
-        this.keyBindsList.updateSize(this.width, this.layout);
-    }
-
-    @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (this.selectedKey != null) {
             this.options.setKey(this.selectedKey, InputConstants.Type.MOUSE.getOrCreate(button));
@@ -79,23 +84,6 @@ public class VoiceBindsScreen extends Screen {
             return true;
         } else {
             return super.mouseClicked(mouseX, mouseY, button);
-        }
-    }
-
-    @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (this.selectedKey != null) {
-            var key = InputConstants.getKey(keyCode, scanCode);
-            if (lastPressedModifier == InputConstants.UNKNOWN && net.neoforged.neoforge.client.settings.KeyModifier.isKeyCodeModifier(key)) {
-                lastPressedModifier = key;
-                isLastModifierHeldDown = true;
-            } else {
-                lastPressedKey = key;
-                isLastKeyHeldDown = true;
-            }
-            return true;
-        } else {
-            return super.keyPressed(keyCode, scanCode, modifiers);
         }
     }
 
@@ -151,24 +139,44 @@ public class VoiceBindsScreen extends Screen {
         super.render(guiGraphics, mouseX, mouseY, partialTick);
     }
 
-    public static final KeyMapping VOICE_BINDING = new KeyMapping(
-        "key.voice_trigger.voice_binding",
-        InputConstants.Type.KEYSYM,
-        GLFW.GLFW_KEY_B,
-        "key.categories.voice_trigger"
-    );
-
-    @SubscribeEvent
-    public static void registerKeyMapping(RegisterKeyMappingsEvent event) {
-        event.register(VOICE_BINDING);
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (this.selectedKey != null) {
+            var key = InputConstants.getKey(keyCode, scanCode);
+            if (lastPressedModifier == InputConstants.UNKNOWN && net.neoforged.neoforge.client.settings.KeyModifier.isKeyCodeModifier(key)) {
+                lastPressedModifier = key;
+                isLastModifierHeldDown = true;
+            } else {
+                lastPressedKey = key;
+                isLastKeyHeldDown = true;
+            }
+            return true;
+        } else {
+            return super.keyPressed(keyCode, scanCode, modifiers);
+        }
     }
 
-    @SubscribeEvent
-    public static void onKeyPress(ClientTickEvent.Post event) {
-        Minecraft client = Minecraft.getInstance();
-        if (client.level == null) return;
-        if (VOICE_BINDING.consumeClick()) {
-            client.setScreen(new VoiceBindsScreen());
+    @Override
+    public void onClose() {
+        // 在关闭界面时，取消所有正在进行的录制
+        if (this.keyBindsList != null) {
+            this.keyBindsList.cancelAllRecordings();
         }
+        super.onClose();
+    }
+
+    @Override
+    protected void init() {
+        this.addTitle();
+        this.addContents();
+        this.addFooter();
+        this.layout.visitWidgets(this::addRenderableWidget);
+        this.repositionElements();
+    }
+
+    @Override
+    protected void repositionElements() {
+        this.layout.arrangeElements();
+        this.keyBindsList.updateSize(this.width, this.layout);
     }
 }

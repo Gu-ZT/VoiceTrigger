@@ -1,183 +1,142 @@
 package dev.dubhe.voice.audio;
 
-import org.apache.commons.math3.complex.Complex;
-import org.apache.commons.math3.transform.DftNormalization;
-import org.apache.commons.math3.transform.FastFourierTransformer;
-import org.apache.commons.math3.transform.TransformType;
+import be.tarsos.dsp.AudioDispatcher;
+import be.tarsos.dsp.AudioEvent;
+import be.tarsos.dsp.AudioProcessor;
+import be.tarsos.dsp.io.jvm.AudioDispatcherFactory;
+import be.tarsos.dsp.mfcc.MFCC;
+import dev.dubhe.voice.VoiceTrigger;
 
-import java.util.Arrays;
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import javax.sound.sampled.LineUnavailableException;
 
+/**
+ * MFCC特征提取器
+ * 负责从音频文件或音频流中提取MFCC特征
+ */
 public class MFCCExtractor {
-    private static final int NUM_MFCC = 13;
-    private static final int NUM_FILTERS = 26;
-    private static final double PRE_EMPHASIS_ALPHA = 0.97;
-    private static final int FFT_SIZE = 512;
 
-    public double[][] extractMFCC(double[] audio, double sampleRate) {
-        // 1. 预加重
-        double[] emphasized = preEmphasis(audio);
+    // 音频参数配置
+    private static final int SAMPLE_RATE = 16000;      // 采样率（16kHz足够且计算快）
+    private static final int BUFFER_SIZE = 1024;        // 缓冲区大小
+    private static final int OVERLAP = 512;             // 重叠大小
+    private static final int MFCC_COUNT = 13;           // MFCC系数数量
+    private static final int MEL_FILTERS = 40;          // Mel滤波器数量
+    private static final float MIN_FREQ = 133.0f;       // 最小频率
+    private static final float MAX_FREQ = 8000.0f;      // 最大频率
 
-        // 2. 分帧
-        int frameLength = (int) (0.025 * sampleRate); // 25ms
-        int frameShift = (int) (0.01 * sampleRate);   // 10ms
-        double[][] frames = frameSignal(emphasized, frameLength, frameShift);
+    /**
+     * 从音频文件中提取MFCC特征序列
+     *
+     * @param audioFile 音频文件
+     * @return MFCC特征序列列表
+     * @throws IOException 文件读取异常
+     */
+    public static List<float[]> extractFromFile(File audioFile) throws IOException {
+        List<float[]> mfccFeatures = new ArrayList<>();
 
-        // 3. 计算每帧的MFCC
-        double[][] mfccs = new double[frames.length][NUM_MFCC];
-        double[] melFilter = createMelFilterBank(sampleRate);
+        try {
+            AudioDispatcher dispatcher = AudioDispatcherFactory.fromPipe(
+                audioFile.getAbsolutePath(),
+                SAMPLE_RATE,
+                BUFFER_SIZE,
+                OVERLAP
+            );
 
-        for (int i = 0; i < frames.length; i++) {
-            // 加窗
-            double[] windowed = applyHammingWindow(frames[i]);
+            MFCC mfccProcessor = new MFCC(
+                BUFFER_SIZE,
+                SAMPLE_RATE,
+                MFCC_COUNT,
+                MEL_FILTERS,
+                MIN_FREQ,
+                MAX_FREQ
+            );
 
-            // 填充到FFT长度
-            double[] padded = new double[FFT_SIZE];
-            System.arraycopy(windowed, 0, padded, 0, Math.min(windowed.length, FFT_SIZE));
+            dispatcher.addAudioProcessor(mfccProcessor);
+            dispatcher.addAudioProcessor(new AudioProcessor() {
+                @Override
+                public boolean process(AudioEvent audioEvent) {
+                    // 获取当前帧的MFCC特征
+                    float[] currentMfcc = mfccProcessor.getMFCC();
+                    if (currentMfcc != null && currentMfcc.length > 0) {
+                        mfccFeatures.add(currentMfcc.clone());
+                    }
+                    return true;
+                }
 
-            // FFT
-            double[] magnitudeSpectrum = computeMagnitudeSpectrum(padded);
+                @Override
+                public void processingFinished() {
+                    VoiceTrigger.LOGGER.info("MFCC extraction finished. Total frames: {}", mfccFeatures.size());
+                }
+            });
 
-            // 应用梅尔滤波器组
-            double[] melSpectrum = applyMelFilterBank(magnitudeSpectrum, melFilter);
+            dispatcher.run();
 
-            // 取对数
-            double[] logMel = new double[melSpectrum.length];
-            for (int j = 0; j < melSpectrum.length; j++) {
-                logMel[j] = Math.log(melSpectrum[j] + 1e-10);
-            }
-
-            // DCT得到MFCC
-            mfccs[i] = applyDCT(logMel);
+        } catch (Exception e) {
+            VoiceTrigger.LOGGER.error("Error extracting MFCC from file: {}", audioFile.getAbsolutePath(), e);
+            throw new IOException("Failed to extract MFCC features", e);
         }
 
-        return mfccs;
+        return mfccFeatures;
     }
 
-    private double[] preEmphasis(double[] signal) {
-        double[] emphasized = new double[signal.length];
-        emphasized[0] = signal[0];
-
-        for (int i = 1; i < signal.length; i++) {
-            emphasized[i] = signal[i] - PRE_EMPHASIS_ALPHA * signal[i - 1];
-        }
-
-        return emphasized;
+    /**
+     * 创建用于实时音频处理的MFCC处理器
+     *
+     * @return AudioDispatcher实例
+     * @throws LineUnavailableException 音频线路不可用异常
+     */
+    public static AudioDispatcher createRealtimeDispatcher() throws LineUnavailableException {
+        return AudioDispatcherFactory.fromDefaultMicrophone(
+            SAMPLE_RATE,
+            BUFFER_SIZE,
+            OVERLAP
+        );
     }
 
-    private double[][] frameSignal(double[] signal, int frameSize, int hopSize) {
-        int numFrames = (int) Math.ceil((double) (signal.length - frameSize) / hopSize) + 1;
-        double[][] frames = new double[numFrames][frameSize];
-
-        for (int i = 0; i < numFrames; i++) {
-            int start = i * hopSize;
-            int end = Math.min(start + frameSize, signal.length);
-
-            if (end - start < frameSize) {
-                // 最后一帧用零填充
-                Arrays.fill(frames[i], 0);
-                System.arraycopy(signal, start, frames[i], 0, end - start);
-            } else {
-                System.arraycopy(signal, start, frames[i], 0, frameSize);
-            }
-        }
-
-        return frames;
+    /**
+     * 创建MFCC处理器实例
+     *
+     * @return MFCC处理器
+     */
+    public static MFCC createMFCCProcessor() {
+        return new MFCC(
+            BUFFER_SIZE,
+            SAMPLE_RATE,
+            MFCC_COUNT,
+            MEL_FILTERS,
+            MIN_FREQ,
+            MAX_FREQ
+        );
     }
 
-    private double[] applyHammingWindow(double[] frame) {
-        double[] windowed = new double[frame.length];
-        int N = frame.length - 1;
-
-        for (int i = 0; i < frame.length; i++) {
-            windowed[i] = frame[i] * (0.54 - 0.46 * Math.cos(2 * Math.PI * i / N));
-        }
-
-        return windowed;
+    /**
+     * 获取采样率配置
+     *
+     * @return 采样率
+     */
+    public static int getSampleRate() {
+        return SAMPLE_RATE;
     }
 
-    private double[] computeMagnitudeSpectrum(double[] signal) {
-        FastFourierTransformer fft = new FastFourierTransformer(DftNormalization.STANDARD);
-        Complex[] spectrum = fft.transform(signal, TransformType.FORWARD);
-
-        double[] magnitude = new double[spectrum.length / 2];
-        for (int i = 0; i < magnitude.length; i++) {
-            magnitude[i] = spectrum[i].abs();
-        }
-
-        return magnitude;
+    /**
+     * 获取缓冲区大小
+     *
+     * @return 缓冲区大小
+     */
+    public static int getBufferSize() {
+        return BUFFER_SIZE;
     }
 
-    private double[] createMelFilterBank(double sampleRate) {
-        // 计算梅尔频率范围
-        double lowMel = hzToMel(300);
-        double highMel = hzToMel(sampleRate / 2);
-
-        // 均匀分布的梅尔频率点
-        double[] melPoints = new double[NUM_FILTERS + 2];
-        for (int i = 0; i < melPoints.length; i++) {
-            melPoints[i] = lowMel + i * (highMel - lowMel) / (melPoints.length - 1);
-        }
-
-        // 转换回线性频率
-        double[] hzPoints = new double[melPoints.length];
-        for (int i = 0; i < hzPoints.length; i++) {
-            hzPoints[i] = melToHz(melPoints[i]);
-        }
-
-        return hzPoints;
-    }
-
-    private double[] applyMelFilterBank(double[] magnitudeSpectrum, double[] hzPoints) {
-        double[] melSpectrum = new double[NUM_FILTERS];
-        double fftSize = magnitudeSpectrum.length * 2;
-
-        for (int m = 0; m < NUM_FILTERS; m++) {
-            double sum = 0;
-
-            for (int k = 0; k < magnitudeSpectrum.length; k++) {
-                double freq = k * 44100 / fftSize;
-                double weight = triangularFilterWeight(freq, hzPoints[m], hzPoints[m + 1], hzPoints[m + 2]);
-                sum += weight * magnitudeSpectrum[k] * magnitudeSpectrum[k];
-            }
-
-            melSpectrum[m] = sum;
-        }
-
-        return melSpectrum;
-    }
-
-    private double triangularFilterWeight(double freq, double left, double center, double right) {
-        if (freq < left || freq > right) {
-            return 0;
-        } else if (freq < center) {
-            return (freq - left) / (center - left);
-        } else {
-            return (right - freq) / (right - center);
-        }
-    }
-
-    private double[] applyDCT(double[] logMelSpectrum) {
-        int N = logMelSpectrum.length;
-        double[] mfcc = new double[NUM_MFCC];
-
-        for (int n = 0; n < NUM_MFCC; n++) {
-            double sum = 0;
-
-            for (int m = 0; m < N; m++) {
-                sum += logMelSpectrum[m] * Math.cos(Math.PI * n * (2 * m + 1) / (2 * N));
-            }
-
-            mfcc[n] = Math.sqrt(2.0 / N) * sum;
-        }
-
-        return mfcc;
-    }
-
-    private double hzToMel(double hz) {
-        return 2595 * Math.log10(1 + hz / 700.0);
-    }
-
-    private double melToHz(double mel) {
-        return 700 * (Math.pow(10, mel / 2595.0) - 1);
+    /**
+     * 获取重叠大小
+     *
+     * @return 重叠大小
+     */
+    public static int getOverlap() {
+        return OVERLAP;
     }
 }
