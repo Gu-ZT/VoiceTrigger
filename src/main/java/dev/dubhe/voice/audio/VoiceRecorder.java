@@ -1,6 +1,7 @@
 package dev.dubhe.voice.audio;
 
 import dev.dubhe.voice.VoiceTrigger;
+import lombok.Getter;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -19,7 +20,6 @@ import javax.sound.sampled.TargetDataLine;
  * 负责录制用户的语音并保存为WAV文件
  */
 public class VoiceRecorder {
-
     private static final int SAMPLE_RATE = 16000;
     private static final int SAMPLE_SIZE_IN_BITS = 16;
     private static final int CHANNELS = 1; // 单声道
@@ -28,7 +28,17 @@ public class VoiceRecorder {
 
     private TargetDataLine targetLine;
     private Thread recordingThread;
+    /**
+     * -- GETTER --
+     *  检查是否正在录制
+     */
+    @Getter
     private volatile boolean isRecording = false;
+    /**
+     * -- GETTER --
+     *  获取输出文件
+     */
+    @Getter
     private File outputFile;
 
     /**
@@ -145,35 +155,16 @@ public class VoiceRecorder {
         );
 
         ByteArrayInputStream byteInputStream = new ByteArrayInputStream(audioData);
-        AudioInputStream audioInputStream = new AudioInputStream(
-            byteInputStream,
-            format,
-            audioData.length / format.getFrameSize()
-        );
 
-        try {
+        try (
+            AudioInputStream audioInputStream = new AudioInputStream(
+                byteInputStream,
+                format,
+                audioData.length / format.getFrameSize()
+            )
+        ) {
             AudioSystem.write(audioInputStream, AudioFileFormat.Type.WAVE, outputFile);
             VoiceTrigger.LOGGER.info("Saved audio to: {}", outputFile.getAbsolutePath());
-        } finally {
-            audioInputStream.close();
         }
-    }
-
-    /**
-     * 检查是否正在录制
-     *
-     * @return 是否正在录制
-     */
-    public boolean isRecording() {
-        return isRecording;
-    }
-
-    /**
-     * 获取输出文件
-     *
-     * @return 输出文件
-     */
-    public File getOutputFile() {
-        return outputFile;
     }
 }

@@ -3,6 +3,7 @@ package dev.dubhe.voice.audio;
 import be.tarsos.dsp.AudioDispatcher;
 import be.tarsos.dsp.AudioEvent;
 import be.tarsos.dsp.AudioProcessor;
+import be.tarsos.dsp.SilenceDetector;
 import be.tarsos.dsp.io.jvm.AudioDispatcherFactory;
 import be.tarsos.dsp.mfcc.MFCC;
 import dev.dubhe.voice.VoiceTrigger;
@@ -45,6 +46,9 @@ public class MFCCExtractor {
                 BUFFER_SIZE,
                 OVERLAP
             );
+
+            SilenceDetector silenceDetector = new SilenceDetector(VoiceListener.SILENCE_THRESHOLD, false);
+            dispatcher.addAudioProcessor(silenceDetector);
 
             MFCC mfccProcessor = new MFCC(
                 BUFFER_SIZE,

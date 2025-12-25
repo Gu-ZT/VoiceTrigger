@@ -5,10 +5,14 @@ import be.tarsos.dsp.AudioEvent;
 import be.tarsos.dsp.AudioProcessor;
 import be.tarsos.dsp.SilenceDetector;
 import be.tarsos.dsp.mfcc.MFCC;
+import com.mojang.blaze3d.platform.InputConstants;
 import dev.dubhe.voice.VoiceTrigger;
 import lombok.Getter;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.neoforged.neoforge.client.event.InputEvent;
+import net.neoforged.neoforge.common.NeoForge;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.LinkedList;
@@ -17,6 +21,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import javax.annotation.Nullable;
 import javax.sound.sampled.LineUnavailableException;
 
 /**
@@ -24,10 +29,9 @@ import javax.sound.sampled.LineUnavailableException;
  * 负责持续监听麦克风输入，检测并匹配用户定义的语音触发键
  */
 public class VoiceListener {
-
-    private static final float SILENCE_THRESHOLD = -70.0f;  // 静音检测阈值（dB）
+    public static final float SILENCE_THRESHOLD = -43.0f;  // 静音检测阈值（dB）
     private static final int WINDOW_SIZE = 62;              // 滑动窗口大小（约2秒，16000/1024*62≈2秒）
-    private static final float SIMILARITY_THRESHOLD = 8.5f; // 相似度阈值（DTW距离小于此值认为匹配）
+    private static final float SIMILARITY_THRESHOLD = 18.0f; // 相似度阈值（DTW距离小于此值认为匹配）
     private static final int MIN_FRAMES_FOR_MATCH = 10;     // 最少需要的帧数才进行匹配
     // 单例模式
     private static VoiceListener instance;
@@ -40,8 +44,6 @@ public class VoiceListener {
     /**
      * -- GETTER --
      * 获取当前是否正在监听
-     *
-     * @return 是否正在监听
      */
     @Getter
     private boolean isListening = false;
@@ -71,7 +73,7 @@ public class VoiceListener {
      * @param keyMapping   按键映射
      * @param mfccFeatures MFCC特征序列
      */
-    public void registerTemplate(KeyMapping keyMapping, List<float[]> mfccFeatures) {
+    public void registerTemplate(KeyMapping keyMapping, @Nullable List<float[]> mfccFeatures) {
         if (mfccFeatures != null && !mfccFeatures.isEmpty()) {
             voiceTemplates.put(keyMapping, mfccFeatures);
             VoiceTrigger.LOGGER.info(
@@ -265,16 +267,31 @@ public class VoiceListener {
             try {
                 // 模拟按键按下和释放
                 keyMapping.setDown(true);
+                InputEvent event;
+                int key = keyMapping.getKey().getValue();
+                if (keyMapping.getKey().getType() == InputConstants.Type.MOUSE) {
+                    //noinspection UnstableApiUsage
+                    event = new InputEvent.MouseButton.Pre(key, 1, 0);
+                } else {
+                    //noinspection UnstableApiUsage
+                    event = new InputEvent.Key(key, GLFW.glfwGetKeyScancode(key), 1, 0);
+                }
+                NeoForge.EVENT_BUS.post(event);
                 // 延迟一小段时间后释放
-                new Thread(() -> {
-                    try {
-                        Thread.sleep(50);
-                        net.minecraft.client.Minecraft.getInstance().execute(() -> keyMapping.setDown(false));
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
+                VoiceTrigger.schedule(
+                    10, () -> {
+                        InputEvent event1;
+                        if (keyMapping.getKey().getType() == InputConstants.Type.MOUSE) {
+                            //noinspection UnstableApiUsage
+                            event1 = new InputEvent.MouseButton.Pre(key, 0, 0);
+                        } else {
+                            //noinspection UnstableApiUsage
+                            event1 = new InputEvent.Key(key, GLFW.glfwGetKeyScancode(key), 0, 0);
+                        }
+                        keyMapping.setDown(false);
+                        NeoForge.EVENT_BUS.post(event1);
                     }
-                }).start();
-
+                );
                 VoiceTrigger.LOGGER.info("Triggered key: {}", keyMapping.getName());
             } catch (Exception e) {
                 VoiceTrigger.LOGGER.error("Error triggering key: {}", keyMapping.getName(), e);

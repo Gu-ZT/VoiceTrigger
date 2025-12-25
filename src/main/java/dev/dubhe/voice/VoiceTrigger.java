@@ -9,14 +9,21 @@ import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.level.LevelEvent;
 import org.slf4j.Logger;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 @Mod(VoiceTrigger.MOD_ID)
 public class VoiceTrigger {
     public static final String MOD_ID = "voice_trigger";
     public static final Logger LOGGER = LogUtils.getLogger();
+    private static final Map<Long, List<Runnable>> SCHEDULES = new HashMap<>();
 
     public VoiceTrigger(IEventBus modEventBus, ModContainer modContainer) {
         modEventBus.addListener(this::setup);
@@ -25,6 +32,7 @@ public class VoiceTrigger {
         // 注册游戏事件监听器
         NeoForge.EVENT_BUS.addListener(this::onWorldLoad);
         NeoForge.EVENT_BUS.addListener(this::onWorldUnload);
+        NeoForge.EVENT_BUS.addListener(this::onClientTick);
     }
 
     private void setup(final FMLCommonSetupEvent event) {
@@ -36,9 +44,7 @@ public class VoiceTrigger {
         // 客户端初始化时加载所有已保存的语音配置
         event.enqueueWork(() -> {
             Minecraft minecraft = Minecraft.getInstance();
-            if (minecraft.options != null && minecraft.options.keyMappings != null) {
-                VoiceProfileManager.loadAllProfiles(minecraft.options.keyMappings);
-            }
+            VoiceProfileManager.loadAllProfiles(minecraft.options.keyMappings);
         });
     }
 
@@ -60,5 +66,19 @@ public class VoiceTrigger {
             LOGGER.info("World unloaded, stopping voice listener");
             VoiceListener.getInstance().stopListening();
         }
+    }
+
+    public static void schedule(long delay, Runnable runnable) {
+        SCHEDULES.computeIfAbsent(delay + Minecraft.getInstance().gui.getGuiTicks(), k -> new ArrayList<>()).add(runnable);
+    }
+
+    public void onClientTick(ClientTickEvent.Pre event) {
+        List<Long> remove = new ArrayList<>();
+        SCHEDULES.forEach((time, runnableList) -> {
+            if (time > Minecraft.getInstance().gui.getGuiTicks()) return;
+            remove.add(time);
+            Minecraft.getInstance().execute(() -> runnableList.forEach(Runnable::run));
+        });
+        remove.forEach(SCHEDULES::remove);
     }
 }

@@ -12,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import javax.annotation.Nullable;
 
 /**
  * 语音配置管理器
@@ -42,7 +43,7 @@ public class VoiceProfileManager {
      * @param mfccFeatures MFCC特征序列
      * @return 是否保存成功
      */
-    public static boolean saveProfile(KeyMapping keyMapping, List<float[]> mfccFeatures) {
+    public static boolean saveProfile(KeyMapping keyMapping, @Nullable List<float[]> mfccFeatures) {
         if (mfccFeatures == null || mfccFeatures.isEmpty()) {
             VoiceTrigger.LOGGER.warn("Cannot save empty MFCC features");
             return false;
@@ -85,7 +86,7 @@ public class VoiceProfileManager {
      * @param keyMapping 按键映射
      * @return MFCC特征序列，如果不存在或加载失败则返回null
      */
-    public static List<float[]> loadProfile(KeyMapping keyMapping) {
+    public static @Nullable List<float[]> loadProfile(KeyMapping keyMapping) {
         String keyName = sanitizeKeyName(keyMapping.getName());
         Path profilePath = VOICE_DIR.resolve(keyName + PROFILE_EXTENSION);
 
