@@ -31,7 +31,7 @@ import javax.sound.sampled.LineUnavailableException;
 public class VoiceListener {
     public static final float SILENCE_THRESHOLD = -43.0f;  // 静音检测阈值（dB）
     private static final int WINDOW_SIZE = 62;              // 滑动窗口大小（约2秒，16000/1024*62≈2秒）
-    private static final float SIMILARITY_THRESHOLD = 18.0f; // 相似度阈值（DTW距离小于此值认为匹配）
+    private static final float SIMILARITY_THRESHOLD = 17.0f; // 相似度阈值（DTW距离小于此值认为匹配）
     private static final int MIN_FRAMES_FOR_MATCH = 10;     // 最少需要的帧数才进行匹配
     // 单例模式
     private static VoiceListener instance;
@@ -269,12 +269,13 @@ public class VoiceListener {
                 keyMapping.setDown(true);
                 InputEvent event;
                 int key = keyMapping.getKey().getValue();
+                int scancode = key >= 0 ? GLFW.glfwGetKeyScancode(key) : -1;
                 if (keyMapping.getKey().getType() == InputConstants.Type.MOUSE) {
                     //noinspection UnstableApiUsage
                     event = new InputEvent.MouseButton.Pre(key, 1, 0);
                 } else {
                     //noinspection UnstableApiUsage
-                    event = new InputEvent.Key(key, GLFW.glfwGetKeyScancode(key), 1, 0);
+                    event = new InputEvent.Key(key, scancode, 1, 0);
                 }
                 NeoForge.EVENT_BUS.post(event);
                 // 延迟一小段时间后释放
@@ -286,7 +287,7 @@ public class VoiceListener {
                             event1 = new InputEvent.MouseButton.Pre(key, 0, 0);
                         } else {
                             //noinspection UnstableApiUsage
-                            event1 = new InputEvent.Key(key, GLFW.glfwGetKeyScancode(key), 0, 0);
+                            event1 = new InputEvent.Key(key, scancode, 0, 0);
                         }
                         keyMapping.setDown(false);
                         NeoForge.EVENT_BUS.post(event1);
