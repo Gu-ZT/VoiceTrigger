@@ -38,7 +38,7 @@ public class VoiceListener {
     private static final int BUFFER_SIZE = 1024;            // 音频缓冲区大小
     private static final int OVERLAP = 512;                 // 重叠大小
     private static final int SAMPLE_RATE = 16000;           // 采样率 16kHz
-    private static final double SIMILARITY_THRESHOLD = 0.75; // Wav2Vec2 相似度阈值
+    private static final double SIMILARITY_THRESHOLD = 0.825; // Wav2Vec2 相似度阈值
     private static final int MIN_FRAMES_FOR_MATCH = 1;     // 最少需要的帧数才进行匹配（约 1 秒）
 
     // 深度学习模型相关
