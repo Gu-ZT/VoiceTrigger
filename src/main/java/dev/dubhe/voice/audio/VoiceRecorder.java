@@ -206,7 +206,7 @@ public class VoiceRecorder {
         
         double originalDuration = totalSamples / (double)SAMPLE_RATE;
         VoiceTrigger.LOGGER.debug(
-            "Trimming silence from {} samples ({:.2f}s, {} bytes)",
+            "Trimming silence from {} samples ({}s, {} bytes)",
             totalSamples,
             originalDuration,
             audioData.length
@@ -246,7 +246,7 @@ public class VoiceRecorder {
         // 如果整个音频都是静音，返回空数组
         if (endIndex < startIndex) {
             VoiceTrigger.LOGGER.warn(
-                "Audio appears to be completely silent! Original: {} samples ({:.2f}s). " +
+                "Audio appears to be completely silent! Original: {} samples ({}s). " +
                 "Possible causes: microphone not working, volume too low, or only recorded silence",
                 totalSamples,
                 originalDuration
@@ -264,7 +264,7 @@ public class VoiceRecorder {
         System.arraycopy(audioData, startIndex * bytesPerSample, trimmedAudio, 0, trimmedLength);
 
         VoiceTrigger.LOGGER.info(
-            "Trimmed silence: {}→{} samples ({:.2f}s→{:.2f}s), removed {} from start, {} from end",
+            "Trimmed silence: {}→{} samples ({}s→{}s), removed {} from start, {} from end",
             totalSamples,
             endIndex - startIndex + 1,
             originalDuration,
@@ -276,7 +276,7 @@ public class VoiceRecorder {
         // 警告：如果裁剪后时长太短
         if (trimmedDuration < 1.0) {
             VoiceTrigger.LOGGER.warn(
-                "Warning: Trimmed audio is very short ({:.2f}s). This may cause matching failures. " +
+                "Warning: Trimmed audio is very short ({}s). This may cause matching failures. " +
                 "Recommended: record at least 2-3 seconds of speech.",
                 trimmedDuration
             );

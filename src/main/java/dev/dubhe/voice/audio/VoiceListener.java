@@ -37,8 +37,8 @@ public class VoiceListener {
     private static final int OVERLAP = 512;                 // 重叠大小
     private static final int SAMPLE_RATE = 16000;           // 采样率 16kHz
     private static final double SIMILARITY_THRESHOLD = 0.85; // Wav2Vec2 相似度阈值
-    private static final int MIN_FRAMES_FOR_MATCH = 15;     // 最少需要的帧数才进行匹配（约 1 秒）
-        
+    private static final int MIN_FRAMES_FOR_MATCH = 1;     // 最少需要的帧数才进行匹配（约 1 秒）
+
     // 深度学习模型相关
     private ZooModel<float[], float[]> dlModel;
     private Predictor<float[], float[]> dlPredictor;
@@ -66,7 +66,7 @@ public class VoiceListener {
             t.setDaemon(true);
             return t;
         });
-            
+
         // 初始化深度学习模型
         initializeDeepLearningModel();
     }
@@ -77,7 +77,7 @@ public class VoiceListener {
         }
         return instance;
     }
-    
+
     /**
      * 初始化深度学习模型
      */
@@ -85,17 +85,17 @@ public class VoiceListener {
         try {
             String modelPath = "src/main/resources/wav2vec2_feature_extractor.pt";
             File modelFile = new File(modelPath);
-            
+
             if (!modelFile.exists()) {
                 VoiceTrigger.LOGGER.error("Deep learning model not found at: {}", modelPath);
                 VoiceTrigger.LOGGER.error("Wav2Vec2 model is required for voice matching");
                 return;
             }
-            
+
             dlModel = AudioSimilarityDL.loadModel(modelPath);
             dlPredictor = dlModel.newPredictor();
             VoiceTrigger.LOGGER.info("Deep learning model loaded successfully");
-            
+
         } catch (Exception e) {
             VoiceTrigger.LOGGER.error("Failed to load deep learning model", e);
         }
@@ -112,14 +112,14 @@ public class VoiceListener {
             VoiceTrigger.LOGGER.warn("Cannot register template without audio file for key: {}", keyMapping.getName());
             return;
         }
-            
+
         VoiceTrigger.LOGGER.info(
             "Registering voice template for key '{}', audio file: {} ({} bytes)",
             keyMapping.getName(),
             audioFile.getAbsolutePath(),
             audioFile.length()
         );
-            
+
         // 如果深度学习模型可用，提取 DL 特征向量
         if (dlPredictor != null) {
             try {
@@ -127,20 +127,20 @@ public class VoiceListener {
                 long startTime = System.currentTimeMillis();
                 float[] audioData = AudioSimilarityDL.readAndPreprocessWav(audioFile.getAbsolutePath());
                 long loadTime = System.currentTimeMillis() - startTime;
-                
+
                 VoiceTrigger.LOGGER.info(
-                    "Loaded audio data for '{}': {} samples ({:.2f}s) in {}ms",
+                    "Loaded audio data for '{}': {} samples ({}s) in {}ms",
                     keyMapping.getName(),
                     audioData.length,
-                    audioData.length / (double)SAMPLE_RATE,
+                    audioData.length / (double) SAMPLE_RATE,
                     loadTime
                 );
-                
+
                 if (audioData.length > 0) {
                     startTime = System.currentTimeMillis();
                     float[] features = AudioSimilarityDL.extractFeatures(dlPredictor, audioData);
                     long extractTime = System.currentTimeMillis() - startTime;
-                    
+
                     if (features != null) {
                         voiceTemplates.put(keyMapping, features);
                         VoiceTrigger.LOGGER.info(
@@ -280,15 +280,15 @@ public class VoiceListener {
         // AudioEvent 中的 getFloatBuffer() 返回归一化的 float 数组 (-1.0 到 1.0)
         float[] pcmData = audioEvent.getFloatBuffer().clone();
         rawAudioCache.addLast(pcmData);
-            
+
         // 保持缓存窗口大小（约 2 秒的音频数据）
         if (rawAudioCache.size() > 31) { // 16000/1024 * 2 ≈ 31 帧
             rawAudioCache.removeFirst();
         }
-            
+
         // 检测是否有声音（非静音）
         boolean currentlySpeaking = currentSoundLevel > SILENCE_THRESHOLD;
-    
+
         if (currentlySpeaking) {
             if (!isSpeaking) {
                 // 开始说话
@@ -296,19 +296,19 @@ public class VoiceListener {
                 rawAudioCache.clear(); // 清空缓存，从新开始记录
                 VoiceTrigger.LOGGER.debug("Speech detected - started speaking, cleared cache");
             }
-    
+
             // Debug 输出：当前缓存帧数和声音级别
             VoiceTrigger.LOGGER.debug(
                 "Audio status: SoundLevel={}, CacheFrames={}, MinRequired={}",
                 currentSoundLevel, rawAudioCache.size(), MIN_FRAMES_FOR_MATCH
             );
-    
+
             // 如果缓存中有足够的帧，尝试匹配
             if (rawAudioCache.size() >= MIN_FRAMES_FOR_MATCH) {
                 VoiceTrigger.LOGGER.debug(
-                    "Attempting voice match with {} frames (~{:.2f} seconds)",
+                    "Attempting voice match with {} frames (~{} seconds)",
                     rawAudioCache.size(),
-                    rawAudioCache.size() * (double)(BUFFER_SIZE - OVERLAP) / SAMPLE_RATE
+                    rawAudioCache.size() * (double) (BUFFER_SIZE - OVERLAP) / SAMPLE_RATE
                 );
                 tryMatch();
             } else {
@@ -323,21 +323,21 @@ public class VoiceListener {
                 // 停止说话
                 isSpeaking = false;
                 int cachedFrames = rawAudioCache.size();
-                double duration = cachedFrames * (double)(BUFFER_SIZE - OVERLAP) / SAMPLE_RATE;
+                double duration = cachedFrames * (double) (BUFFER_SIZE - OVERLAP) / SAMPLE_RATE;
                 VoiceTrigger.LOGGER.debug(
-                    "Speech ended - cached {} frames (~{:.2f} seconds). Reason: sound level {}dB < threshold {}dB",
+                    "Speech ended - cached {} frames (~{} seconds). Reason: sound level {}dB < threshold {}dB",
                     cachedFrames, duration, currentSoundLevel, SILENCE_THRESHOLD
                 );
-                
+
                 // 检查是否因为时长不足导致无法匹配
                 if (cachedFrames < MIN_FRAMES_FOR_MATCH) {
                     VoiceTrigger.LOGGER.warn(
-                        "Speech too short for matching! Got {} frames ({:.2f}s), need at least {} frames ({:.2f}s). " +
+                        "Speech too short for matching! Got {} frames ({}s), need at least {} frames ({}s). " +
                         "Try speaking longer or reduce MIN_FRAMES_FOR_MATCH.",
                         cachedFrames,
                         duration,
                         MIN_FRAMES_FOR_MATCH,
-                        MIN_FRAMES_FOR_MATCH * (double)(BUFFER_SIZE - OVERLAP) / SAMPLE_RATE
+                        MIN_FRAMES_FOR_MATCH * (double) (BUFFER_SIZE - OVERLAP) / SAMPLE_RATE
                     );
                 }
             }
@@ -352,44 +352,44 @@ public class VoiceListener {
             VoiceTrigger.LOGGER.debug("Cannot match: no templates registered");
             return;
         }
-        
+
         if (dlPredictor == null) {
             VoiceTrigger.LOGGER.debug("Cannot match: DL predictor not initialized");
             return;
         }
-    
+
         // 复制当前缓存以避免并发修改
         List<float[]> audioCacheCopy = new ArrayList<>(rawAudioCache);
-        
+
         VoiceTrigger.LOGGER.debug(
             "Starting voice matching against {} templates with {} audio frames",
             voiceTemplates.size(),
             audioCacheCopy.size()
         );
-    
+
         // 在单独的线程中执行匹配
         matchExecutor.submit(() -> {
             for (Map.Entry<KeyMapping, float[]> entry : voiceTemplates.entrySet()) {
                 KeyMapping key = entry.getKey();
                 float[] templateFeatures = entry.getValue();
-    
+
                 try {
                     // 从缓存的 PCM 数据重构原始波形
                     float[] currentAudioData = mergePcmData(audioCacheCopy);
-                    
+
                     VoiceTrigger.LOGGER.debug(
-                        "Matching for key '{}': Merged audio data length = {} samples ({:.2f}s)",
+                        "Matching for key '{}': Merged audio data length = {} samples ({}s)",
                         key.getName(),
                         currentAudioData.length,
-                        currentAudioData.length / (double)SAMPLE_RATE
+                        currentAudioData.length / (double) SAMPLE_RATE
                     );
-                    
+
                     if (currentAudioData.length > 0) {
                         // 提取当前音频的特征
                         long startTime = System.currentTimeMillis();
                         float[] currentFeatures = AudioSimilarityDL.extractFeatures(dlPredictor, currentAudioData);
                         long extractTime = System.currentTimeMillis() - startTime;
-                             
+
                         if (currentFeatures != null) {
                             VoiceTrigger.LOGGER.debug(
                                 "Feature extraction for '{}' took {}ms, feature dim = {}",
@@ -397,34 +397,34 @@ public class VoiceListener {
                                 extractTime,
                                 currentFeatures.length
                             );
-                            
+
                             // 计算余弦相似度
                             double similarity = AudioSimilarityDL.cosineSimilarity(currentFeatures, templateFeatures);
-                                
+
                             VoiceTrigger.LOGGER.info(
-                                "Voice match for key '{}': Similarity = {:.4f} (threshold: {})",
+                                "Voice match for key '{}': Similarity = {} (threshold: {})",
                                 key.getName(),
                                 similarity,
                                 SIMILARITY_THRESHOLD
                             );
-                                    
+
                             // 如果相似度达到阈值，触发按键
                             if (similarity >= SIMILARITY_THRESHOLD) {
                                 VoiceTrigger.LOGGER.info(
-                                    "✓ MATCH SUCCESS for key '{}' (Similarity: {:.4f} >= {:.4f})",
+                                    "✓ MATCH SUCCESS for key '{}' (Similarity: {} >= {})",
                                     key.getName(),
                                     similarity,
                                     SIMILARITY_THRESHOLD
                                 );
                                 triggerKey(key);
-    
+
                                 // 清空缓存，避免重复触发
                                 rawAudioCache.clear();
                                 break;
                             } else {
                                 double diff = SIMILARITY_THRESHOLD - similarity;
                                 VoiceTrigger.LOGGER.debug(
-                                    "✗ Match failed for '{}': similarity {:.4f} is {:.4f} below threshold {:.4f}",
+                                    "✗ Match failed for '{}': similarity {} is {} below threshold {}",
                                     key.getName(),
                                     similarity,
                                     diff,
@@ -461,13 +461,13 @@ public class VoiceListener {
         if (pcmCache.isEmpty()) {
             return new float[0];
         }
-        
+
         // 计算总长度
         int totalLength = 0;
         for (float[] chunk : pcmCache) {
             totalLength += chunk.length;
         }
-        
+
         // 合并所有 PCM 数据
         float[] merged = new float[totalLength];
         int index = 0;
@@ -475,7 +475,7 @@ public class VoiceListener {
             System.arraycopy(chunk, 0, merged, index, chunk.length);
             index += chunk.length;
         }
-        
+
         return merged;
     }
 
@@ -546,7 +546,7 @@ public class VoiceListener {
     public void shutdown() {
         stopListening();
         matchExecutor.shutdown();
-        
+
         // 释放深度学习模型资源
         if (dlPredictor != null) {
             dlPredictor.close();
@@ -554,7 +554,7 @@ public class VoiceListener {
         if (dlModel != null) {
             dlModel.close();
         }
-        
+
         VoiceTrigger.LOGGER.info("Voice listener shut down");
     }
 }
