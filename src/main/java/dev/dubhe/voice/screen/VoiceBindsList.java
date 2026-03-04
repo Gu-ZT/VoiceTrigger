@@ -282,7 +282,7 @@ public class VoiceBindsList extends ContainerObjectSelectionList<VoiceBindsList.
                             dev.dubhe.voice.audio.VoiceListener.getInstance().startListening();
                         });
                     }
-                }, "MFCCExtractor"
+                }, "VoiceProfileSaver"
             ).start();
 
             recorder = null;

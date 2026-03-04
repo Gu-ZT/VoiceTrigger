@@ -1,10 +1,12 @@
 package dev.dubhe.voice.audio;
 
+import ai.djl.inference.Predictor;
+import ai.djl.repository.zoo.ZooModel;
 import be.tarsos.dsp.AudioDispatcher;
 import be.tarsos.dsp.AudioEvent;
 import be.tarsos.dsp.AudioProcessor;
 import be.tarsos.dsp.SilenceDetector;
-import be.tarsos.dsp.mfcc.MFCC;
+import be.tarsos.dsp.io.jvm.AudioDispatcherFactory;
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.dubhe.voice.VoiceTrigger;
 import lombok.Getter;
@@ -14,6 +16,7 @@ import net.neoforged.neoforge.client.event.InputEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import org.lwjgl.glfw.GLFW;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
@@ -26,21 +29,26 @@ import javax.sound.sampled.LineUnavailableException;
 
 /**
  * 实时语音监听器
- * 负责持续监听麦克风输入，检测并匹配用户定义的语音触发键
+ * 负责持续监听麦克风输入，使用 Wav2Vec2 深度学习模型进行语音匹配
  */
 public class VoiceListener {
     public static final float SILENCE_THRESHOLD = -43.0f;  // 静音检测阈值（dB）
-    private static final int WINDOW_SIZE = 62;              // 滑动窗口大小（约2秒，16000/1024*62≈2秒）
-    private static final float SIMILARITY_THRESHOLD = 17.0f; // 相似度阈值（DTW距离小于此值认为匹配）
-    private static final int MIN_FRAMES_FOR_MATCH = 10;     // 最少需要的帧数才进行匹配
+    private static final int BUFFER_SIZE = 1024;            // 音频缓冲区大小
+    private static final int OVERLAP = 512;                 // 重叠大小
+    private static final int SAMPLE_RATE = 16000;           // 采样率 16kHz
+    private static final double SIMILARITY_THRESHOLD = 0.85; // Wav2Vec2 相似度阈值
+    private static final int MIN_FRAMES_FOR_MATCH = 15;     // 最少需要的帧数才进行匹配（约 1 秒）
+        
+    // 深度学习模型相关
+    private ZooModel<float[], float[]> dlModel;
+    private Predictor<float[], float[]> dlPredictor;
     // 单例模式
     private static VoiceListener instance;
-    private final LinkedList<float[]> currentWindow = new LinkedList<>();
+    private final LinkedList<float[]> rawAudioCache = new LinkedList<>(); // 原始 PCM 数据缓存 (float 格式)
     private final ExecutorService matchExecutor;
-    // 存储所有语音模板及其对应的按键
-    private final Map<KeyMapping, List<float[]>> voiceTemplates = new ConcurrentHashMap<>();
+    // 存储所有语音模板及其对应的按键和 DL 特征向量
+    private final Map<KeyMapping, float[]> voiceTemplates = new ConcurrentHashMap<>();
     private AudioDispatcher dispatcher;
-    private MFCC mfccProcessor;
     /**
      * -- GETTER --
      * 获取当前是否正在监听
@@ -52,12 +60,15 @@ public class VoiceListener {
     private double currentSoundLevel = 0.0;
 
     private VoiceListener() {
-        // 创建一个单线程执行器用于DTW匹配，避免阻塞音频线程
+        // 创建一个单线程执行器用于匹配，避免阻塞音频线程
         matchExecutor = Executors.newSingleThreadExecutor(r -> {
             Thread t = new Thread(r, "VoiceMatcher");
             t.setDaemon(true);
             return t;
         });
+            
+        // 初始化深度学习模型
+        initializeDeepLearningModel();
     }
 
     public static synchronized VoiceListener getInstance() {
@@ -66,20 +77,60 @@ public class VoiceListener {
         }
         return instance;
     }
+    
+    /**
+     * 初始化深度学习模型
+     */
+    private void initializeDeepLearningModel() {
+        try {
+            String modelPath = "src/main/resources/wav2vec2_feature_extractor.pt";
+            File modelFile = new File(modelPath);
+            
+            if (!modelFile.exists()) {
+                VoiceTrigger.LOGGER.error("Deep learning model not found at: {}", modelPath);
+                VoiceTrigger.LOGGER.error("Wav2Vec2 model is required for voice matching");
+                return;
+            }
+            
+            dlModel = AudioSimilarityDL.loadModel(modelPath);
+            dlPredictor = dlModel.newPredictor();
+            VoiceTrigger.LOGGER.info("Deep learning model loaded successfully");
+            
+        } catch (Exception e) {
+            VoiceTrigger.LOGGER.error("Failed to load deep learning model", e);
+        }
+    }
 
     /**
      * 注册语音模板
      *
-     * @param keyMapping   按键映射
-     * @param mfccFeatures MFCC特征序列
+     * @param keyMapping 按键映射
+     * @param audioFile  原始音频文件（用于提取 DL 特征）
      */
-    public void registerTemplate(KeyMapping keyMapping, @Nullable List<float[]> mfccFeatures) {
-        if (mfccFeatures != null && !mfccFeatures.isEmpty()) {
-            voiceTemplates.put(keyMapping, mfccFeatures);
-            VoiceTrigger.LOGGER.info(
-                "Registered voice template for key: {}, frames: {}",
-                keyMapping.getName(), mfccFeatures.size()
-            );
+    public void registerTemplate(KeyMapping keyMapping, @Nullable File audioFile) {
+        if (audioFile == null || !audioFile.exists()) {
+            VoiceTrigger.LOGGER.warn("Cannot register template without audio file");
+            return;
+        }
+            
+        // 如果深度学习模型可用，提取 DL 特征向量
+        if (dlPredictor != null) {
+            try {
+                // 直接从 WAV 文件读取原始波形数据
+                float[] audioData = AudioSimilarityDL.readAndPreprocessWav(audioFile.getAbsolutePath());
+                if (audioData.length > 0) {
+                    float[] features = AudioSimilarityDL.extractFeatures(dlPredictor, audioData);
+                    if (features != null) {
+                        voiceTemplates.put(keyMapping, features);
+                        VoiceTrigger.LOGGER.info(
+                            "Registered voice template for key: {}, feature dim: {}",
+                            keyMapping.getName(), features.length
+                        );
+                    }
+                }
+            } catch (Exception e) {
+                VoiceTrigger.LOGGER.error("Failed to extract DL features for key: {}", keyMapping.getName(), e);
+            }
         }
     }
 
@@ -103,9 +154,12 @@ public class VoiceListener {
         }
 
         try {
-            // 创建音频调度器
-            dispatcher = MFCCExtractor.createRealtimeDispatcher();
-            mfccProcessor = MFCCExtractor.createMFCCProcessor();
+            // 创建音频调度器（直接从麦克风获取原始 PCM 数据）
+            dispatcher = AudioDispatcherFactory.fromDefaultMicrophone(
+                SAMPLE_RATE,
+                BUFFER_SIZE,
+                OVERLAP
+            );
 
             // 创建静音检测器
             SilenceDetector silenceDetector = new SilenceDetector(SILENCE_THRESHOLD, false);
@@ -125,14 +179,11 @@ public class VoiceListener {
                 }
             });
 
-            // 添加MFCC处理器
-            dispatcher.addAudioProcessor(mfccProcessor);
-
-            // 添加主处理器
+            // 添加主处理器（缓存原始 PCM 数据并进行匹配）
             dispatcher.addAudioProcessor(new AudioProcessor() {
                 @Override
                 public boolean process(AudioEvent audioEvent) {
-                    processAudioFrame();
+                    processAudioFrame(audioEvent);
                     return true;
                 }
 
@@ -175,7 +226,7 @@ public class VoiceListener {
                 Thread.currentThread().interrupt();
             }
         }
-        currentWindow.clear();
+        rawAudioCache.clear();
         isSpeaking = false;
         VoiceTrigger.LOGGER.info("Voice listener stopped");
     }
@@ -183,33 +234,31 @@ public class VoiceListener {
     /**
      * 处理音频帧
      */
-    private void processAudioFrame() {
+    private void processAudioFrame(AudioEvent audioEvent) {
+        // 缓存原始 PCM 数据（用于 Wav2Vec2）
+        // AudioEvent 中的 getFloatBuffer() 返回归一化的 float 数组 (-1.0 到 1.0)
+        float[] pcmData = audioEvent.getFloatBuffer().clone();
+        rawAudioCache.addLast(pcmData);
+            
+        // 保持缓存窗口大小（约 2 秒的音频数据）
+        if (rawAudioCache.size() > 31) { // 16000/1024 * 2 ≈ 31 帧
+            rawAudioCache.removeFirst();
+        }
+            
         // 检测是否有声音（非静音）
-        // 使用声压级别判断，高于阈值表示有声音
         boolean currentlySpeaking = currentSoundLevel > SILENCE_THRESHOLD;
-
+    
         if (currentlySpeaking) {
             if (!isSpeaking) {
                 // 开始说话
                 isSpeaking = true;
-                currentWindow.clear();
+                rawAudioCache.clear(); // 清空缓存，从新开始记录
                 VoiceTrigger.LOGGER.debug("Speech detected");
             }
-
-            // 获取当前帧的MFCC特征
-            float[] currentMfcc = mfccProcessor.getMFCC();
-            if (currentMfcc != null && currentMfcc.length > 0) {
-                currentWindow.add(currentMfcc.clone());
-
-                // 保持窗口大小
-                if (currentWindow.size() > WINDOW_SIZE) {
-                    currentWindow.removeFirst();
-                }
-
-                // 如果窗口中有足够的帧，尝试匹配
-                if (currentWindow.size() >= MIN_FRAMES_FOR_MATCH) {
-                    tryMatch();
-                }
+    
+            // 如果缓存中有足够的帧，尝试匹配
+            if (rawAudioCache.size() >= MIN_FRAMES_FOR_MATCH) {
+                tryMatch();
             }
         } else {
             if (isSpeaking) {
@@ -224,36 +273,82 @@ public class VoiceListener {
      * 尝试匹配当前窗口与所有模板
      */
     private void tryMatch() {
-        if (voiceTemplates.isEmpty()) {
+        if (voiceTemplates.isEmpty() || dlPredictor == null) {
             return;
         }
-
-        // 复制当前窗口以避免并发修改
-        List<float[]> windowCopy = new ArrayList<>(currentWindow);
-
-        // 在单独的线程中执行DTW匹配
+    
+        // 复制当前缓存以避免并发修改
+        List<float[]> audioCacheCopy = new ArrayList<>(rawAudioCache);
+    
+        // 在单独的线程中执行匹配
         matchExecutor.submit(() -> {
-            for (Map.Entry<KeyMapping, List<float[]>> entry : voiceTemplates.entrySet()) {
+            for (Map.Entry<KeyMapping, float[]> entry : voiceTemplates.entrySet()) {
                 KeyMapping key = entry.getKey();
-                List<float[]> template = entry.getValue();
-
-                // 计算DTW距离
-                float distance = DTW.compute(windowCopy.subList(1, windowCopy.size() - 1), template.subList(1, windowCopy.size() - 1));
-                VoiceTrigger.LOGGER.debug(
-                    "Voice match detected for key: {}, distance: {}",
-                    key.getName(),
-                    distance
-                );
-                // 如果距离小于阈值，认为匹配成功
-                if (distance < SIMILARITY_THRESHOLD) {
-                    triggerKey(key);
-
-                    // 清空窗口，避免重复触发
-                    currentWindow.clear();
-                    break;
+                float[] templateFeatures = entry.getValue();
+    
+                try {
+                    // 从缓存的 PCM 数据重构原始波形
+                    float[] currentAudioData = mergePcmData(audioCacheCopy);
+                    if (currentAudioData.length > 0) {
+                        // 提取当前音频的特征
+                        float[] currentFeatures = AudioSimilarityDL.extractFeatures(dlPredictor, currentAudioData);
+                            
+                        if (currentFeatures != null) {
+                            // 计算余弦相似度
+                            double similarity = AudioSimilarityDL.cosineSimilarity(currentFeatures, templateFeatures);
+                                
+                            VoiceTrigger.LOGGER.debug(
+                                "Voice match for key: {}, Similarity: {}",
+                                key.getName(), similarity
+                            );
+                                    
+                            // 如果相似度达到阈值，触发按键
+                            if (similarity >= SIMILARITY_THRESHOLD) {
+                                VoiceTrigger.LOGGER.info(
+                                    "Match detected for key: {} (Similarity: {})",
+                                    key.getName(), similarity
+                                );
+                                triggerKey(key);
+    
+                                // 清空缓存，避免重复触发
+                                rawAudioCache.clear();
+                                break;
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    VoiceTrigger.LOGGER.warn("Matching failed for key: {}", key.getName(), e);
                 }
             }
         });
+    }
+
+    /**
+     * 合并缓存的 PCM 数据为连续的 float 数组
+     *
+     * @param pcmCache PCM 数据缓存（float 格式）
+     * @return 合并后的 float 数组
+     */
+    private float[] mergePcmData(List<float[]> pcmCache) {
+        if (pcmCache.isEmpty()) {
+            return new float[0];
+        }
+        
+        // 计算总长度
+        int totalLength = 0;
+        for (float[] chunk : pcmCache) {
+            totalLength += chunk.length;
+        }
+        
+        // 合并所有 PCM 数据
+        float[] merged = new float[totalLength];
+        int index = 0;
+        for (float[] chunk : pcmCache) {
+            System.arraycopy(chunk, 0, merged, index, chunk.length);
+            index += chunk.length;
+        }
+        
+        return merged;
     }
 
     /**
@@ -262,7 +357,7 @@ public class VoiceListener {
      * @param keyMapping 要触发的按键
      */
     private void triggerKey(KeyMapping keyMapping) {
-        // 在Minecraft主线程中执行按键操作
+        // 在 Minecraft 主线程中执行按键操作
         Minecraft.getInstance().execute(() -> {
             try {
                 // 模拟按键按下和释放
@@ -323,6 +418,15 @@ public class VoiceListener {
     public void shutdown() {
         stopListening();
         matchExecutor.shutdown();
+        
+        // 释放深度学习模型资源
+        if (dlPredictor != null) {
+            dlPredictor.close();
+        }
+        if (dlModel != null) {
+            dlModel.close();
+        }
+        
         VoiceTrigger.LOGGER.info("Voice listener shut down");
     }
 }
