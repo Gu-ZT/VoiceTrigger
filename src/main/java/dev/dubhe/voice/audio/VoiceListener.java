@@ -238,7 +238,7 @@ public class VoiceListener {
                 List<float[]> template = entry.getValue();
 
                 // 计算DTW距离
-                float distance = DTW.compute(windowCopy, template);
+                float distance = DTW.compute(windowCopy.subList(1, windowCopy.size() - 1), template.subList(1, windowCopy.size() - 1));
                 VoiceTrigger.LOGGER.debug(
                     "Voice match detected for key: {}, distance: {}",
                     key.getName(),

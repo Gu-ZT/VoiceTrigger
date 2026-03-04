@@ -6,8 +6,7 @@ import java.util.List;
  * 动态时间规整（Dynamic Time Warping）算法实现
  * 用于计算两个不同长度的MFCC序列之间的相似度
  */
-public
-class DTW {
+public class DTW {
 
     /**
      * 计算两个 MFCC 序列之间的 DTW 距离
@@ -42,10 +41,7 @@ class DTW {
                 float dist = euclideanDistance(seq1.get(i - 1), seq2.get(j - 1));
 
                 // DTW 递推公式
-                dtw[i][j] = dist + Math.min(
-                    Math.min(dtw[i - 1][j], dtw[i][j - 1]),
-                    dtw[i - 1][j - 1]
-                );
+                dtw[i][j] = dist + Math.min(Math.min(dtw[i - 1][j], dtw[i][j - 1]), dtw[i - 1][j - 1]);
             }
         }
 
