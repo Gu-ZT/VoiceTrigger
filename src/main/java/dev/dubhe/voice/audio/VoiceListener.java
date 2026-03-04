@@ -17,6 +17,8 @@ import net.neoforged.neoforge.common.NeoForge;
 import org.lwjgl.glfw.GLFW;
 
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
@@ -36,7 +38,7 @@ public class VoiceListener {
     private static final int BUFFER_SIZE = 1024;            // 音频缓冲区大小
     private static final int OVERLAP = 512;                 // 重叠大小
     private static final int SAMPLE_RATE = 16000;           // 采样率 16kHz
-    private static final double SIMILARITY_THRESHOLD = 0.85; // Wav2Vec2 相似度阈值
+    private static final double SIMILARITY_THRESHOLD = 0.75; // Wav2Vec2 相似度阈值
     private static final int MIN_FRAMES_FOR_MATCH = 1;     // 最少需要的帧数才进行匹配（约 1 秒）
 
     // 深度学习模型相关
@@ -83,19 +85,65 @@ public class VoiceListener {
      */
     private void initializeDeepLearningModel() {
         try {
-            String modelPath = "src/main/resources/wav2vec2_feature_extractor.pt";
-            File modelFile = new File(modelPath);
-
-            if (!modelFile.exists()) {
-                VoiceTrigger.LOGGER.error("Deep learning model not found at: {}", modelPath);
-                VoiceTrigger.LOGGER.error("Wav2Vec2 model is required for voice matching");
-                return;
+            // 从类路径加载资源（适用于开发环境和打包后的 JAR）
+            String resourcePath = "/wav2vec2_feature_extractor.pt";
+            java.net.URL resourceUrl = getClass().getResource(resourcePath);
+                
+            if (resourceUrl == null) {
+                // 尝试从文件系统加载（开发环境备用方案）
+                File fallbackFile = new File("src/main/resources/wav2vec2_feature_extractor.pt");
+                if (fallbackFile.exists()) {
+                    dlModel = AudioSimilarityDL.loadModel(fallbackFile.getAbsolutePath());
+                    dlPredictor = dlModel.newPredictor();
+                    VoiceTrigger.LOGGER.info("Loaded model from filesystem: {}", fallbackFile.getAbsolutePath());
+                    return;
+                } else {
+                    VoiceTrigger.LOGGER.error("Deep learning model not found at: {}", resourcePath);
+                    VoiceTrigger.LOGGER.error("Also checked fallback path: {}", fallbackFile.getAbsolutePath());
+                    VoiceTrigger.LOGGER.error("Wav2Vec2 model is required for voice matching");
+                    return;
+                }
             }
+                
+            // 将 URL 转换为临时文件路径（DJL 需要文件系统路径）
+            String modelPath;
+            if ("jar".equals(resourceUrl.getProtocol()) || resourceUrl.getPath().contains("!")) {
+                // 如果在 JAR 包中，需要解压到临时文件
+                try(InputStream inputStream = VoiceListener.class.getClassLoader().getResourceAsStream(resourcePath.startsWith("/") ? resourcePath.substring(1) : resourcePath)) {
+                    if (inputStream == null) {
+                        VoiceTrigger.LOGGER.error("Cannot read model from classpath: {}", resourcePath);
+                        return;
+                    }
 
+                    // 创建临时文件
+                    File tempFile = File.createTempFile("wav2vec2_", ".pt");
+                    tempFile.deleteOnExit();
+
+                    try (FileOutputStream outputStream = new FileOutputStream(tempFile)) {
+                        byte[] buffer = new byte[8192];
+                        int bytesRead;
+                        while ((bytesRead = inputStream.read(buffer)) != -1) {
+                            outputStream.write(buffer, 0, bytesRead);
+                        }
+                    } catch (Exception e) {
+                        VoiceTrigger.LOGGER.error("Failed to extract model from JAR", e);
+                        return;
+                    }
+
+                    modelPath = tempFile.getAbsolutePath();
+                    VoiceTrigger.LOGGER.info("Extracted model to temporary file: {}", modelPath);
+                } catch (Exception e) {
+                    VoiceTrigger.LOGGER.error("Failed to extract model from JAR", e);
+                    return;
+                }
+            } else {
+                // 普通文件路径直接使用 URL 解码后的路径
+                modelPath = java.net.URLDecoder.decode(resourceUrl.getPath(), java.nio.charset.StandardCharsets.UTF_8.name());
+            }
+                
             dlModel = AudioSimilarityDL.loadModel(modelPath);
             dlPredictor = dlModel.newPredictor();
-            VoiceTrigger.LOGGER.info("Deep learning model loaded successfully");
-
+            VoiceTrigger.LOGGER.info("Deep learning model loaded successfully from: {}", resourcePath);
         } catch (Exception e) {
             VoiceTrigger.LOGGER.error("Failed to load deep learning model", e);
         }
