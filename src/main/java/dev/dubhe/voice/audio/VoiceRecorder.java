@@ -30,13 +30,13 @@ public class VoiceRecorder {
     private Thread recordingThread;
     /**
      * -- GETTER --
-     *  检查是否正在录制
+     * 检查是否正在录制
      */
     @Getter
     private volatile boolean isRecording = false;
     /**
      * -- GETTER --
-     *  获取输出文件
+     * 获取输出文件
      */
     @Getter
     private File outputFile;
@@ -90,6 +90,7 @@ public class VoiceRecorder {
         );
         recordingThread.start();
 
+        //noinspection ConstantValue
         VoiceTrigger.LOGGER.info(
             "Started recording to: {} (format: {}Hz, {}bit, {}, {})",
             outputFile.getAbsolutePath(),
@@ -137,21 +138,21 @@ public class VoiceRecorder {
     private void recordAudio() throws IOException {
         ByteArrayOutputStream byteOutputStream = new ByteArrayOutputStream();
         byte[] buffer = new byte[4096];
-    
+
         while (isRecording) {
             int bytesRead = targetLine.read(buffer, 0, buffer.length);
             if (bytesRead > 0) {
                 byteOutputStream.write(buffer, 0, bytesRead);
             }
         }
-    
+
         // 保存为 WAV 文件
         byte[] audioData = byteOutputStream.toByteArray();
-            
+
         // 移除开头和结尾的静音帧
         byte[] trimmedAudioData = trimSilence(audioData);
-            
-        saveToWavFile(trimmedAudioData);
+
+        saveToWavFile(audioData);
     }
 
     /**
@@ -189,7 +190,7 @@ public class VoiceRecorder {
      * @param audioData 原始音频数据
      * @return 裁剪后的音频数据
      */
-    private byte[] trimSilence(byte[] audioData) {
+    public static byte[] trimSilence(byte[] audioData) {
         if (audioData.length == 0) {
             VoiceTrigger.LOGGER.debug("Trim silence skipped: empty audio data");
             return audioData;
@@ -198,13 +199,13 @@ public class VoiceRecorder {
         // 16-bit 采样，每个样本 2 字节
         int bytesPerSample = SAMPLE_SIZE_IN_BITS / 8;
         int totalSamples = audioData.length / bytesPerSample;
-        
+
         if (totalSamples == 0) {
             VoiceTrigger.LOGGER.debug("Trim silence skipped: no samples");
             return audioData;
         }
-        
-        double originalDuration = totalSamples / (double)SAMPLE_RATE;
+
+        double originalDuration = totalSamples / (double) SAMPLE_RATE;
         VoiceTrigger.LOGGER.debug(
             "Trimming silence from {} samples ({}s, {} bytes)",
             totalSamples,
@@ -213,8 +214,8 @@ public class VoiceRecorder {
         );
 
         // 静音阈值（振幅的百分比）
-        double silenceThreshold = 0.02;
-        
+        double silenceThreshold = 0.01;
+
         // 找到第一个非静音样本（开头）
         int startIndex = 0;
         for (int i = 0; i < totalSamples; i++) {
@@ -222,7 +223,7 @@ public class VoiceRecorder {
             // 读取 16-bit 有符号整数（小端序）
             short sample = (short) ((audioData[byteIndex + 1] << 8) | (audioData[byteIndex] & 0xFF));
             double normalizedAmplitude = Math.abs(sample) / 32768.0;
-            
+
             if (normalizedAmplitude > silenceThreshold) {
                 startIndex = i;
                 break;
@@ -236,12 +237,14 @@ public class VoiceRecorder {
             // 读取 16-bit 有符号整数（小端序）
             short sample = (short) ((audioData[byteIndex + 1] << 8) | (audioData[byteIndex] & 0xFF));
             double normalizedAmplitude = Math.abs(sample) / 32768.0;
-            
+
             if (normalizedAmplitude > silenceThreshold) {
                 endIndex = i;
                 break;
             }
         }
+
+        endIndex = Math.min(totalSamples - 1, endIndex + 3);
 
         // 如果整个音频都是静音，返回空数组
         if (endIndex < startIndex) {
@@ -258,8 +261,8 @@ public class VoiceRecorder {
         int trimmedLength = (endIndex - startIndex + 1) * bytesPerSample;
         int removedFromStart = startIndex;
         int removedFromEnd = totalSamples - endIndex - 1;
-        double trimmedDuration = (endIndex - startIndex + 1) / (double)SAMPLE_RATE;
-        
+        double trimmedDuration = (endIndex - startIndex + 1) / (double) SAMPLE_RATE;
+
         byte[] trimmedAudio = new byte[trimmedLength];
         System.arraycopy(audioData, startIndex * bytesPerSample, trimmedAudio, 0, trimmedLength);
 
@@ -272,7 +275,7 @@ public class VoiceRecorder {
             removedFromStart,
             removedFromEnd
         );
-        
+
         // 警告：如果裁剪后时长太短
         if (trimmedDuration < 1.0) {
             VoiceTrigger.LOGGER.warn(

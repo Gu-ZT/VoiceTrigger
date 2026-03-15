@@ -11,15 +11,14 @@ import ai.djl.translate.NoBatchifyTranslator;
 import ai.djl.translate.TranslatorContext;
 import dev.dubhe.voice.VoiceTrigger;
 
-import javax.annotation.Nullable;
-import javax.sound.sampled.AudioFormat;
-import javax.sound.sampled.AudioInputStream;
-import javax.sound.sampled.AudioSystem;
 import java.io.File;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.ShortBuffer;
-import java.util.List;
+import javax.annotation.Nullable;
+import javax.sound.sampled.AudioFormat;
+import javax.sound.sampled.AudioInputStream;
+import javax.sound.sampled.AudioSystem;
 
 /**
  * 基于深度学习的音频相似度计算工具
@@ -32,7 +31,24 @@ public class AudioSimilarityDL {
     private static final int TARGET_SAMPLE_RATE = 16000;
 
     // 相似度阈值（余弦相似度大于此值认为匹配）
-    private static final double SIMILARITY_THRESHOLD = 0.96;
+    public static final double SIMILARITY_THRESHOLD = 0.75;
+    public static final double EUCLIDEAN_DISTANCE_THRESHOLD = 3;
+
+    public static float[] standardize(float[] data) {
+        double sum = 0;
+        for (float x : data) sum += x;
+        float mean = (float) (sum / data.length);
+
+        double sumSq = 0;
+        for (float x : data) sumSq += (x - mean) * (x - mean);
+        float std = (float) Math.sqrt(sumSq / data.length + 1e-7);
+
+        float[] standardized = new float[data.length];
+        for (int i = 0; i < data.length; i++) {
+            standardized[i] = (data[i] - mean) / std;
+        }
+        return standardized;
+    }
 
     /**
      * 1. 预处理音频：读取 WAV 文件，转为 16kHz 单声道的 float 数组
@@ -45,7 +61,6 @@ public class AudioSimilarityDL {
     public static float[] readAndPreprocessWav(String filePath) throws Exception {
         File audioFile = new File(filePath);
         AudioInputStream originalStream = AudioSystem.getAudioInputStream(audioFile);
-        AudioFormat originalFormat = originalStream.getFormat();
 
         // 目标格式：16kHz, 16 位 (2 字节), 单声道，线性 PCM, 小端序
         AudioFormat targetFormat = new AudioFormat(
@@ -63,24 +78,29 @@ public class AudioSimilarityDL {
 
         // 读取所有字节
         byte[] bytes = targetStream.readAllBytes();
+        bytes = VoiceRecorder.trimSilence(bytes);
         targetStream.close();
         originalStream.close();
 
-        // 将 16-bit PCM byte 转换为 float (范围 -1.0 到 1.0)
+        // 2. 严格转换：Short (Little Endian) -> Float -> Standardize
         float[] floatArray = new float[bytes.length / 2];
-        ShortBuffer shortBuffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer();
         for (int i = 0; i < floatArray.length; i++) {
-            floatArray[i] = shortBuffer.get(i) / 32768.0f; // 归一化
+            // 手动处理字节，确保不出错
+            int low = bytes[i * 2] & 0xff;
+            int high = bytes[i * 2 + 1] << 8;
+            short s = (short) (high | low);
+            floatArray[i] = s / 32768.0f; // 先归一化到 [-1, 1]
         }
 
-        return floatArray;
+        // 3. 标准化
+        return standardize(floatArray);
     }
 
     /**
      * 2. 从原始音频字节数据转换为模型输入
      * 用于实时录音场景：将录音的 PCM 字节数据转为 16kHz 的 float 数组
      *
-     * @param audioData 原始音频字节数据（PCM 格式）
+     * @param audioData  原始音频字节数据（PCM 格式）
      * @param sampleRate 原始采样率
      * @return 预处理后的 float 数组（16kHz）
      */
@@ -156,6 +176,38 @@ public class AudioSimilarityDL {
     }
 
     /**
+     * 计算两个特征向量的余弦相似度
+     * 因为 Python 模型末尾已经做了 L2 归一化，所以直接计算点积即为余弦相似度
+     */
+    public static float calculateSimilarity(float[] feat1, float[] feat2) {
+        float dotProduct = 0;
+        for (int i = 0; i < feat1.length; i++) {
+            dotProduct += feat1[i] * feat2[i];
+        }
+        return dotProduct;
+    }
+
+    /**
+     * 计算两个向量之间的欧氏距离
+     * 距离越小，表示两个音频特征在空间上越接近
+     */
+    public static double euclideanDistance(float[] vectorA, float[] vectorB) {
+        if (vectorA.length != vectorB.length) {
+            throw new IllegalArgumentException("向量维度不一致，无法计算欧氏距离");
+        }
+
+        double sum = 0.0;
+        for (int i = 0; i < vectorA.length; i++) {
+            // 计算每一维度的差值并求平方
+            double diff = (double) vectorA[i] - (double) vectorB[i];
+            sum += diff * diff;
+        }
+
+        // 最后开方
+        return Math.sqrt(sum);
+    }
+
+    /**
      * 加载模型并创建预测器
      *
      * @param modelPath 模型文件路径
@@ -197,27 +249,7 @@ public class AudioSimilarityDL {
      * @param similarity 相似度分数
      * @return 是否相似
      */
-    public static boolean isSimilar(double similarity) {
-        return similarity >= SIMILARITY_THRESHOLD;
-    }
-
-    /**
-     * 获取当前相似度阈值
-     *
-     * @return 阈值
-     */
-    public static double getSimilarityThreshold() {
-        return SIMILARITY_THRESHOLD;
-    }
-
-    /**
-     * 设置相似度阈值（用于调试或动态调整）
-     *
-     * @param threshold 新阈值
-     */
-    public static void setSimilarityThreshold(double threshold) {
-        VoiceTrigger.LOGGER.info("Similarity threshold changed from {} to {}", SIMILARITY_THRESHOLD, threshold);
-        // 注意：由于 SIMILARITY_THRESHOLD 是 final 的，这个方法主要用于日志记录
-        // 实际使用时应该直接修改阈值常量或使用配置系统
+    public static boolean isSimilar(double similarity, double distance) {
+        return similarity >= SIMILARITY_THRESHOLD && distance <= EUCLIDEAN_DISTANCE_THRESHOLD;
     }
 }

@@ -9,6 +9,7 @@ import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
+import net.neoforged.neoforge.client.event.ClientPauseChangeEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.level.LevelEvent;
@@ -33,6 +34,7 @@ public class VoiceTrigger {
         NeoForge.EVENT_BUS.addListener(this::onWorldLoad);
         NeoForge.EVENT_BUS.addListener(this::onWorldUnload);
         NeoForge.EVENT_BUS.addListener(this::onClientTick);
+        NeoForge.EVENT_BUS.addListener(this::onClientPause);
     }
 
     private void setup(final FMLCommonSetupEvent event) {
@@ -65,6 +67,19 @@ public class VoiceTrigger {
         if (event.getLevel().isClientSide()) {
             LOGGER.info("World unloaded, stopping voice listener");
             VoiceListener.getInstance().stopListening();
+        }
+    }
+
+    /**
+     * 当游戏暂停时停止语音监听器
+     */
+    private void onClientPause(ClientPauseChangeEvent.Post event) {
+        if (event.isPaused()) {
+            LOGGER.info("Client paused, stopping voice listener");
+            VoiceListener.getInstance().stopListening();
+        } else {
+            LOGGER.info("Client resumed, starting voice listener");
+            VoiceListener.getInstance().startListening();
         }
     }
 

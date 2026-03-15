@@ -114,7 +114,7 @@ public class VoiceProfileManager {
         for (KeyMapping keyMapping : keyMappings) {
             // 直接获取音频文件用于 DL 特征提取
             File audioFile = getAudioFile(keyMapping);
-            if (audioFile != null && audioFile.exists()) {
+            if (audioFile.exists()) {
                 VoiceListener.getInstance().registerTemplate(keyMapping, audioFile);
                 loaded++;
             }

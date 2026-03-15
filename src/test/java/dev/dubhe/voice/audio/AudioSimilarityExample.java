@@ -2,6 +2,7 @@ package dev.dubhe.voice.audio;
 
 import ai.djl.inference.Predictor;
 import ai.djl.repository.zoo.ZooModel;
+import dev.dubhe.voice.VoiceTrigger;
 
 import java.io.File;
 
@@ -14,7 +15,7 @@ public class AudioSimilarityExample {
     public static void main(String[] args) {
         try {
             // 模型路径
-            String modelPath = "src/main/resources/wav2vec2_feature_extractor.pt";
+            String modelPath = "src/main/resources/voice_engine_jit.pt";
 
             // 检查模型文件是否存在
             File modelFile = new File(modelPath);
@@ -36,10 +37,8 @@ public class AudioSimilarityExample {
             // 清理资源
             predictor.close();
             model.close();
-
         } catch (Exception e) {
-            System.err.println("测试失败：" + e.getMessage());
-            e.printStackTrace();
+            VoiceTrigger.LOGGER.error("测试失败：{}", e.getMessage(), e);
         }
     }
 
@@ -50,12 +49,13 @@ public class AudioSimilarityExample {
         System.out.println("\n=== 测试 1: WAV 文件相似度比较 ===");
 
         // 假设的音频文件路径（需要替换为实际路径）
-        // String audio1 = "D:\\Projects\\repos\\Voice-Test\\data\\voice\\Accio 飞来术\\1.wav";
-        // String audio2 = "D:\\Projects\\repos\\Voice-Test\\data\\voice\\Accio 飞来术\\5.wav";
+//        String audio1 = "D:\\Projects\\repos\\Voice-Test\\data\\voice\\Accio 飞来术\\1.wav";
+        String audio2 = "D:\\Projects\\repos\\Voice-Test\\data\\voice\\Accio 飞来术\\5.wav";
 
         String audio1 = "D:\\Projects\\repos\\Voice-Test\\data\\voice\\Arania Exumai 驱逐蜘蛛\\1.wav";
-        String audio2 = "D:\\Projects\\repos\\Voice-Test\\data\\voice\\Arania Exumai 驱逐蜘蛛\\3.wav";
+//        String audio2 = "D:\\Projects\\repos\\Voice-Test\\data\\voice\\Arania Exumai 驱逐蜘蛛\\3.wav";
 
+        System.out.println("正在比较音频文件：" + audio1 + " 和 " + audio2);
         File file1 = new File(audio1);
         File file2 = new File(audio2);
 
@@ -80,11 +80,15 @@ public class AudioSimilarityExample {
             System.out.printf("特征向量 2 维度：%d%n", features2.length);
 
             // 计算余弦相似度
-            double similarity = AudioSimilarityDL.cosineSimilarity(features1, features2);
+            double cosineSimilarity = AudioSimilarityDL.cosineSimilarity(features1, features2);
+            double similarity = AudioSimilarityDL.calculateSimilarity(features1, features2);
+            double distance = AudioSimilarityDL.euclideanDistance(features1, features2);
+            System.out.printf("余弦相似度得分：%.4f%n", cosineSimilarity);
             System.out.printf("相似度得分：%.4f%n", similarity);
+            System.out.printf("欧几里得距离：%.4f%n", distance);
 
             // 判断是否相似
-            boolean isSimilar = AudioSimilarityDL.isSimilar(similarity);
+            boolean isSimilar = AudioSimilarityDL.isSimilar(similarity, distance);
             System.out.println("结论：" + (isSimilar ? "这是高度相似的音频！" : "音频差异较大"));
         }
     }
