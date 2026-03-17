@@ -1,0 +1,84 @@
+
+Map env = System.getenv()
+
+def getEnv = {
+    return env
+}
+
+def getOrDefault = { String key, String defaultValue ->
+    String value
+    (value = findProperty(key)) && !value.isEmpty() ? value : defaultValue
+}
+
+def isGithubCI = {
+    return env.get("GITHUB_ACTION") != null
+}
+
+def isJitpack = {
+    return env.get("JITPACK") != null
+}
+
+def getBuildNumber = {
+    return env.GITHUB_RUN_NUMBER ? env.GITHUB_RUN_NUMBER : 0
+}
+
+def getVersionGit = { List paths ->
+    if (grgit == null || grgit.head() == null) {
+        return "nogit"
+    }
+
+    List latestCommits = paths.isEmpty() ? grgit.log(maxCommits: 1) : grgit.log(paths: paths, maxCommits: 1)
+    return latestCommits.isEmpty() ? "uncommited" : "${latestCommits.get(0).id.substring(0, 7)}"
+}
+
+def getVersionType = {
+    String type = getOrDefault("ow.build.environment.buildType", null)
+
+    if (type != null) {
+        return type
+    }
+
+    if (isJitpack()) {
+        return "jitpack"
+    }
+
+    type = env.BUILD_TYPE
+
+    switch (type) {
+        case "RELEASE":
+            return "stable"
+        case "BETA":
+            return "snapshot"
+        case "PULL_REQUEST":
+            return "pull_request"
+        default:
+            return "dev"
+    }
+}
+
+def getVersionPatch = { List paths ->
+    if (grgit == null || grgit.head() == null) {
+        return 0
+    }
+
+    List latestCommits = paths.isEmpty() ? grgit.log() : grgit.log(paths: paths)
+    return latestCommits.size()
+}
+
+def getVersion = { Project proj ->
+    return "${proj.property("mod_version")}.${getVersionPatch(proj == rootProject ? [] : [proj.projectDir.name])}"
+}
+
+def getVersionWithCommitHash = { Project proj ->
+    return "${getVersion(proj)}+${getVersionGit(proj == rootProject ? [] : [proj.projectDir.name])}-${getVersionType()}"
+}
+
+def getModVersion = { Project proj ->
+    return "${getVersion(proj)}-${getVersionType()}"
+}
+
+def getMavenArtifactVersion = { Project proj ->
+    return getVersionType() == "stable" ? "${getVersion(proj)}" : "${getModVersion(proj)}"
+}
+
+this.project.version = getMavenArtifactVersion(this.project)

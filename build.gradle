@@ -4,34 +4,12 @@ plugins {
     id 'idea'
     id 'net.neoforged.moddev' version '2.0.107'
     id 'io.freefair.lombok' version '8.7.1'
+    id 'org.ajoberstar.grgit' version'5.3.3'
 }
 
-version = mod_version
+apply from: "$rootDir/gradle/scripts/version.gradle"
 group = mod_group_id
 
-repositories {
-    mavenLocal()
-    maven {
-        name = "Iron's Maven - Release"
-        url = "https://code.redspace.io/releases"
-    }
-    maven {
-        name = "Illusive Soulworks maven"
-        url = "https://maven.theillusivec4.top/"
-    }
-    maven {
-        name = 'GeckoLib'
-        url 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/'
-    }
-    maven {
-        name "KosmX's maven"
-        url 'https://maven.kosmx.dev/'
-    }
-    maven {
-        name = "TarsosDSP repository"
-        url = "https://mvn.0110.be/releases"
-    }
-}
 
 base {
     archivesName = mod_id
@@ -39,162 +17,10 @@ base {
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
-neoForge {
-    version = project.neo_version
-
-    parchment {
-        mappingsVersion = project.parchment_mappings_version
-        minecraftVersion = project.parchment_minecraft_version
-    }
-
-    runs {
-        client {
-            client()
-            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
-        }
-
-        server {
-            server()
-            programArgument '--nogui'
-            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
-        }
-
-        gameTestServer {
-            type = "gameTestServer"
-            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
-        }
-
-        data {
-            data()
-            programArguments.addAll '--mod', project.mod_id, '--all', '--output', file('src/generated/resources/').getAbsolutePath(), '--existing', file('src/main/resources/').getAbsolutePath()
-        }
-
-        var isJbr = System.getProperty('java.vm.vendor').contains('JetBrains')
-        configureEach {
-            systemProperty 'forge.logging.markers', 'REGISTRIES'
-
-            if (isJbr) {
-                jvmArgument "-XX:+AllowEnhancedClassRedefinition"
-            }
-            logLevel = org.slf4j.event.Level.DEBUG
-        }
-    }
-
-    mods {
-        "${mod_id}" {
-            sourceSet(sourceSets.main)
-        }
-    }
-}
-
-sourceSets.main.resources { srcDir 'src/generated/resources' }
-
-
-dependencies {
-    // 音频处理（仅用于麦克风输入，不使用 MFCC 功能）
-    jarJar(additionalRuntimeClasspath(implementation('be.tarsos.dsp:core:2.5')))
-    jarJar(additionalRuntimeClasspath(implementation('be.tarsos.dsp:jvm:2.5')))
-
-    // === DJL 核心库 ===
-    jarJar(additionalRuntimeClasspath(implementation('ai.djl:api:0.36.0') {
-        exclude group: 'com.google.code.gson', module: 'gson'
-        exclude group: 'net.java.dev.jna', module: 'jna'
-        exclude group: 'org.apache.commons', module: 'commons-compress'
-        exclude group: 'org.slf4j', module: 'slf4j-api'
-    }))
-
-    // === DJL PyTorch 引擎 ===
-    jarJar(additionalRuntimeClasspath(implementation('ai.djl.pytorch:pytorch-engine:0.36.0') {
-        exclude group: 'com.google.code.gson', module: 'gson'
-        exclude group: 'net.java.dev.jna', module: 'jna'
-        exclude group: 'org.apache.commons', module: 'commons-compress'
-        exclude group: 'org.slf4j', module: 'slf4j-api'
-    }))
-
-    jarJar(implementation("dev.anvilcraft.lib:anvillib-config-neoforge-1.21.1:2.0.0+snapshot.216"))
-    jarJar(implementation("dev.anvilcraft.lib:anvillib-registrum-neoforge-1.21.1:2.0.0+snapshot.216"))
-
-    // Curios
-    compileOnly("top.theillusivec4.curios:curios-neoforge:9.5.1+1.21.1:api")
-    runtimeOnly("top.theillusivec4.curios:curios-neoforge:9.5.1+1.21.1")
-    // Iron's Spells 'n Spellbooks
-    compileOnly("io.redspace:irons_spellbooks:1.21.1-3.14.8:api")
-    runtimeOnly("io.redspace:irons_spellbooks:1.21.1-3.14.8")
-    // GeckoLib
-    implementation('software.bernie.geckolib:geckolib-neoforge-1.21.1:4.8.2')
-    // Player Animation Lib
-    implementation("dev.kosmx.player-anim:player-animation-lib-forge:2.0.1+1.21.1")
-}
-
-var generateModMetadata = tasks.register("generateModMetadata", ProcessResources) {
-    var replaceProperties = [minecraft_version      : minecraft_version,
-                             minecraft_version_range: minecraft_version_range,
-                             neo_version            : neo_version,
-                             neo_version_range      : neo_version_range,
-                             loader_version_range   : loader_version_range,
-                             mod_id                 : mod_id,
-                             mod_name               : mod_name,
-                             mod_license            : mod_license,
-                             mod_version            : mod_version,
-                             mod_authors            : mod_authors,
-                             mod_description        : mod_description]
-    inputs.properties replaceProperties
-    expand replaceProperties
-    from "src/main/templates"
-    into "build/generated/sources/modMetadata"
-}
-
-sourceSets.main.resources.srcDir generateModMetadata
-neoForge.ideSyncTask generateModMetadata
-
-tasks.register('sourcesJar', Jar) {
-    from delombok.outputs.files
-    dependsOn delombok
-    archiveClassifier = "sources"
-}
-
-artifacts {
-    archives tasks.jar
-    archives tasks.sourcesJar
-}
-
-jar {
-    from(project.file("LICENSE"))
-    from(project.file("README.md"))
-}
-
-base {
-    archivesName = "${project.name}-${minecraft_version}"
-}
-
-publishing {
-    publications {
-        mavenJava(MavenPublication) {
-            groupId = project.group
-            artifactId = project.archivesBaseName
-            version = project.version
-
-            from components.java
-
-            artifact sourcesJar
-        }
-    }
-
-    // See https://docs.gradle.org/current/userguide/publishing_maven.html for information on how to set up publishing.
-    repositories {
-        // Add repositories to publish to here.
-        def MAVEN_URL = System.getenv("MAVEN_URL")
-        if (MAVEN_URL != null) {
-            maven {
-                url MAVEN_URL
-                credentials {
-                    username System.getenv("MAVEN_USERNAME")
-                    password System.getenv("MAVEN_PASSWORD")
-                }
-            }
-        }
-    }
-}
+apply from: "$rootDir/gradle/scripts/repositories.gradle"
+apply from: "$rootDir/gradle/scripts/modDevGradle.gradle"
+apply from: "$rootDir/gradle/scripts/resources.gradle"
+apply from: "$rootDir/dependencies.gradle"
 
 idea {
     module {
