@@ -1,7 +1,7 @@
 {
   "screen.voice_trigger.binding": "语音绑定",
   "key.voice_trigger.voice_binding": "语音绑定",
-  "key.categories.voice_trigger": "语音触发",
+  "key.categories.voice_trigger": "声随形动",
   "controls.record": "录制",
   "controls.stop_recording": "停止",
   "controls.bound": "已绑定",
@@ -11,5 +11,15 @@
   "voice_trigger.profile_saved": "语音配置已保存",
   "voice_trigger.profile_failed": "保存语音配置失败",
   "voice_trigger.listener_started": "语音监听器已启动",
-  "voice_trigger.listener_stopped": "语音监听器已停止"
+  "voice_trigger.configuration.buffer_size": "缓冲区大小",
+  "voice_trigger.configuration.buffer_size.tooltip": "缓冲区大小（字节）",
+  "voice_trigger.configuration.min_frames_for_match": "最小匹配帧数",
+  "voice_trigger.configuration.min_frames_for_match.tooltip": "匹配所需的最小帧数",
+  "voice_trigger.configuration.section.voice_trigger.client.toml": "声随形动 客户端配置",
+  "voice_trigger.configuration.section.voice_trigger.client.toml.title": "声随形动 客户端配置",
+  "voice_trigger.configuration.silence_threshold": "静音阈值",
+  "voice_trigger.configuration.silence_threshold.tooltip": "静音检测阈值（分贝）",
+  "voice_trigger.configuration.similarity_threshold": "相似度阈值",
+  "voice_trigger.configuration.similarity_threshold.tooltip": "相似度阈值（若相似度超过此值则视为匹配）",
+  "voice_trigger.configuration.title": "声随形动 配置"
 }

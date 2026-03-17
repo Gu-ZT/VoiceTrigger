@@ -35,14 +35,9 @@ import javax.sound.sampled.LineUnavailableException;
  * 负责持续监听麦克风输入，使用 Wav2Vec2 深度学习模型进行语音匹配
  */
 public class VoiceListener {
-    public static final float SILENCE_THRESHOLD = -43.0f;  // 静音检测阈值（dB）
-    private static final int BUFFER_SIZE = 4096;            // 音频缓冲区大小
     private static final int OVERLAP = 512;                 // 重叠大小
     private static final int SAMPLE_RATE = 16000;           // 采样率 16kHz
-    private static final int MIN_FRAMES_FOR_MATCH = 3;     // 最少需要的帧数才进行匹配（约 1 秒）
 
-    // 深度学习模型相关
-    private ZooModel<float[], float[]> dlModel;
     private Predictor<float[], float[]> dlPredictor;
     // 单例模式
     private static VoiceListener instance;
@@ -87,25 +82,25 @@ public class VoiceListener {
     private void initializeDeepLearningModel() {
         try {
             // 从类路径加载资源（适用于开发环境和打包后的 JAR）
-//            String resourcePath = "/wav2vec2_feature_extractor.pt";
             String resourcePath = "/voice_engine_jit.pt";
             java.net.URL resourceUrl = getClass().getResource(resourcePath);
 
+            // 深度学习模型相关
+            ZooModel<float[], float[]> dlModel;
             if (resourceUrl == null) {
                 // 尝试从文件系统加载（开发环境备用方案）
-//                File fallbackFile = new File("src/main/resources/wav2vec2_feature_extractor.pt");
                 File fallbackFile = new File("src/main/resources/voice_engine_jit.pt");
                 if (fallbackFile.exists()) {
+                    //noinspection resource
                     dlModel = AudioSimilarityDL.loadModel(fallbackFile.getAbsolutePath());
                     dlPredictor = dlModel.newPredictor();
                     VoiceTrigger.LOGGER.info("Loaded model from filesystem: {}", fallbackFile.getAbsolutePath());
-                    return;
                 } else {
                     VoiceTrigger.LOGGER.error("Deep learning model not found at: {}", resourcePath);
                     VoiceTrigger.LOGGER.error("Also checked fallback path: {}", fallbackFile.getAbsolutePath());
                     VoiceTrigger.LOGGER.error("Wav2Vec2 model is required for voice matching");
-                    return;
                 }
+                return;
             }
 
             // 将 URL 转换为临时文件路径（DJL 需要文件系统路径）
@@ -148,6 +143,7 @@ public class VoiceListener {
                 modelPath = java.net.URLDecoder.decode(resourceUrl.getPath(), StandardCharsets.UTF_8);
             }
 
+            //noinspection resource
             dlModel = AudioSimilarityDL.loadModel(modelPath);
             dlPredictor = dlModel.newPredictor();
             VoiceTrigger.LOGGER.info("Deep learning model loaded successfully from: {}", resourcePath);
@@ -253,12 +249,12 @@ public class VoiceListener {
             // 创建音频调度器（直接从麦克风获取原始 PCM 数据）
             dispatcher = AudioDispatcherFactory.fromDefaultMicrophone(
                 SAMPLE_RATE,
-                BUFFER_SIZE,
+                VoiceTrigger.CONFIG.bufferSize,
                 OVERLAP
             );
 
             // 创建静音检测器
-            SilenceDetector silenceDetector = new SilenceDetector(SILENCE_THRESHOLD, false);
+            SilenceDetector silenceDetector = new SilenceDetector(VoiceTrigger.CONFIG.silenceThreshold, false);
 
             // 添加静音检测处理器
             dispatcher.addAudioProcessor(silenceDetector);
@@ -342,7 +338,7 @@ public class VoiceListener {
         }
 
         // 检测是否有声音（非静音）
-        boolean currentlySpeaking = currentSoundLevel > SILENCE_THRESHOLD;
+        boolean currentlySpeaking = currentSoundLevel > VoiceTrigger.CONFIG.silenceThreshold;
 
         if (currentlySpeaking) {
             if (!isSpeaking) {
@@ -356,41 +352,41 @@ public class VoiceListener {
             // Debug 输出：当前缓存帧数和声音级别
             VoiceTrigger.LOGGER.debug(
                 "Audio status: SoundLevel={}, CacheFrames={}, MinRequired={}",
-                currentSoundLevel, rawAudioCache.size(), MIN_FRAMES_FOR_MATCH
+                currentSoundLevel, rawAudioCache.size(), VoiceTrigger.CONFIG.minFramesForMatch
             );
         } else {
             if (
                 isSpeaking
                 && (
-                    rawAudioCache.size() >= MIN_FRAMES_FOR_MATCH
+                    rawAudioCache.size() >= VoiceTrigger.CONFIG.minFramesForMatch
                     || System.currentTimeMillis() - lastSpeakingTime >= 2000
                 )
             ) {
                 // 停止说话
                 isSpeaking = false;
                 int cachedFrames = rawAudioCache.size();
-                double duration = cachedFrames * (double) (BUFFER_SIZE - OVERLAP) / SAMPLE_RATE;
+                double duration = cachedFrames * (double) (VoiceTrigger.CONFIG.bufferSize - OVERLAP) / SAMPLE_RATE;
                 VoiceTrigger.LOGGER.debug(
                     "Speech ended - cached {} frames (~{} seconds). Reason: sound level {}dB < threshold {}dB",
-                    cachedFrames, duration, currentSoundLevel, SILENCE_THRESHOLD
+                    cachedFrames, duration, currentSoundLevel, VoiceTrigger.CONFIG.silenceThreshold
                 );
 
                 // 如果缓存中有足够的帧，尝试匹配
-                if (cachedFrames >= MIN_FRAMES_FOR_MATCH) {
+                if (cachedFrames >= VoiceTrigger.CONFIG.minFramesForMatch) {
                     VoiceTrigger.LOGGER.debug(
                         "Attempting voice match with {} frames (~{} seconds)",
                         rawAudioCache.size(),
-                        rawAudioCache.size() * (double) (BUFFER_SIZE - OVERLAP) / SAMPLE_RATE
+                        rawAudioCache.size() * (double) (VoiceTrigger.CONFIG.bufferSize - OVERLAP) / SAMPLE_RATE
                     );
                     tryMatch();
                 } else {
                     VoiceTrigger.LOGGER.warn(
                         "Speech too short for matching! Got {} frames ({}s), need at least {} frames ({}s). " +
-                        "Try speaking longer or reduce MIN_FRAMES_FOR_MATCH.",
+                        "Try speaking longer or reduce VoiceTrigger.CONFIG.minFramesForMatch.",
                         cachedFrames,
                         duration,
-                        MIN_FRAMES_FOR_MATCH,
-                        MIN_FRAMES_FOR_MATCH * (double) (BUFFER_SIZE - OVERLAP) / SAMPLE_RATE
+                        VoiceTrigger.CONFIG.minFramesForMatch,
+                        VoiceTrigger.CONFIG.minFramesForMatch * (double) (VoiceTrigger.CONFIG.bufferSize - OVERLAP) / SAMPLE_RATE
                     );
                 }
             }
@@ -453,24 +449,23 @@ public class VoiceListener {
 
                             // 计算余弦相似度
                             double similarity = AudioSimilarityDL.calculateSimilarity(currentFeatures, templateFeatures);
-//                            double distance = AudioSimilarityDL.euclideanDistance(currentFeatures, templateFeatures);
 
                             VoiceTrigger.LOGGER.info(
                                 "Voice match for key '{}': Similarity = {} (threshold: {})",
                                 key.getName(),
                                 similarity,
-                                AudioSimilarityDL.SIMILARITY_THRESHOLD
+                                VoiceTrigger.CONFIG.similarityThreshold
                             );
 
                             // 如果相似度达到阈值，触发按键
                             if (
-                                similarity >= AudioSimilarityDL.SIMILARITY_THRESHOLD
+                                similarity >= VoiceTrigger.CONFIG.similarityThreshold
                             ) {
                                 VoiceTrigger.LOGGER.info(
                                     "✓ MATCH SUCCESS for key '{}' (Similarity: {} >= {})",
                                     key.getName(),
                                     similarity,
-                                    AudioSimilarityDL.SIMILARITY_THRESHOLD
+                                    VoiceTrigger.CONFIG.similarityThreshold
                                 );
                                 triggerKey(key);
 
@@ -478,13 +473,13 @@ public class VoiceListener {
                                 rawAudioCache.clear();
                                 break;
                             } else {
-                                double diff = AudioSimilarityDL.SIMILARITY_THRESHOLD - similarity;
+                                double diff = VoiceTrigger.CONFIG.similarityThreshold - similarity;
                                 VoiceTrigger.LOGGER.debug(
                                     "✗ Match failed for '{}': similarity {} is {} below threshold {}",
                                     key.getName(),
                                     similarity,
                                     diff,
-                                    AudioSimilarityDL.SIMILARITY_THRESHOLD
+                                    VoiceTrigger.CONFIG.similarityThreshold
                                 );
                             }
                         } else {
@@ -576,40 +571,5 @@ public class VoiceListener {
                 VoiceTrigger.LOGGER.error("Error triggering key: {}", keyMapping.getName(), e);
             }
         });
-    }
-
-    /**
-     * 获取已注册的模板数量
-     *
-     * @return 模板数量
-     */
-    public int getTemplateCount() {
-        return voiceTemplates.size();
-    }
-
-    /**
-     * 清空所有模板
-     */
-    public void clearAllTemplates() {
-        voiceTemplates.clear();
-        VoiceTrigger.LOGGER.info("Cleared all voice templates");
-    }
-
-    /**
-     * 关闭监听器
-     */
-    public void shutdown() {
-        stopListening();
-        matchExecutor.shutdown();
-
-        // 释放深度学习模型资源
-        if (dlPredictor != null) {
-            dlPredictor.close();
-        }
-        if (dlModel != null) {
-            dlModel.close();
-        }
-
-        VoiceTrigger.LOGGER.info("Voice listener shut down");
     }
 }

@@ -111,15 +111,8 @@ dependencies {
         exclude group: 'org.slf4j', module: 'slf4j-api'
     }))
 
-    // === 补充测试实现库 ===
-    testImplementation 'com.google.code.gson:gson:2.10.1'
-    testImplementation 'net.java.dev.jna:jna:5.14.0'
-    testImplementation 'org.apache.commons:commons-compress:1.26.0'
-    testImplementation 'org.slf4j:slf4j-api:2.0.9'
-    testImplementation 'org.apache.logging.log4j:log4j-api:2.22.1'
-    testImplementation 'org.apache.logging.log4j:log4j-core:2.22.1'
-    testImplementation 'org.apache.logging.log4j:log4j-slf4j2-impl:2.22.1'
-    testImplementation 'com.mojang:logging:1.2.7'
+    jarJar(implementation("dev.anvilcraft.lib:anvillib-config-neoforge-1.21.1:2.0.0+snapshot.216"))
+    jarJar(implementation("dev.anvilcraft.lib:anvillib-registrum-neoforge-1.21.1:2.0.0+snapshot.216"))
 
     // Curios
     compileOnly("top.theillusivec4.curios:curios-neoforge:9.5.1+1.21.1:api")

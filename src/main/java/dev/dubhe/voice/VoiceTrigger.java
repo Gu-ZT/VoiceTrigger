@@ -1,8 +1,11 @@
 package dev.dubhe.voice;
 
 import com.mojang.logging.LogUtils;
+import dev.anvilcraft.lib.v2.config.ConfigManager;
+import dev.anvilcraft.lib.v2.registrum.Registrum;
 import dev.dubhe.voice.audio.VoiceListener;
 import dev.dubhe.voice.audio.VoiceProfileManager;
+import dev.dubhe.voice.data.VoiceTriggerDatagen;
 import net.minecraft.client.Minecraft;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
@@ -24,7 +27,9 @@ import java.util.Map;
 public class VoiceTrigger {
     public static final String MOD_ID = "voice_trigger";
     public static final Logger LOGGER = LogUtils.getLogger();
+    public static final VoiceTriggerConfig CONFIG = ConfigManager.register(VoiceTrigger.MOD_ID, VoiceTriggerConfig::new);
     private static final Map<Long, List<Runnable>> SCHEDULES = new HashMap<>();
+    public static final Registrum REGISTRUM = Registrum.create(VoiceTrigger.MOD_ID);
 
     public VoiceTrigger(IEventBus modEventBus, ModContainer modContainer) {
         modEventBus.addListener(this::setup);
@@ -35,6 +40,7 @@ public class VoiceTrigger {
         NeoForge.EVENT_BUS.addListener(this::onWorldUnload);
         NeoForge.EVENT_BUS.addListener(this::onClientTick);
         NeoForge.EVENT_BUS.addListener(this::onClientPause);
+        VoiceTriggerDatagen.init();
     }
 
     private void setup(final FMLCommonSetupEvent event) {

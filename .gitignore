@@ -10,6 +10,7 @@ logs/
 out/
 # mpeltonen/sbt-idea plugin
 .idea_modules/
+**/.cache/
 
 # JIRA plugin
 atlassian-ide-plugin.xml

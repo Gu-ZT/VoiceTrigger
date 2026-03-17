@@ -12,9 +12,6 @@ import ai.djl.translate.TranslatorContext;
 import dev.dubhe.voice.VoiceTrigger;
 
 import java.io.File;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.nio.ShortBuffer;
 import javax.annotation.Nullable;
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioInputStream;
@@ -26,13 +23,8 @@ import javax.sound.sampled.AudioSystem;
  * 通过余弦相似度判断音频相似性。Wav2Vec2 是端到端模型，不需要 MFCC 等传统特征。
  */
 public class AudioSimilarityDL {
-
     // Wav2Vec2 要求的标准：16kHz 采样率
     private static final int TARGET_SAMPLE_RATE = 16000;
-
-    // 相似度阈值（余弦相似度大于此值认为匹配）
-    public static final double SIMILARITY_THRESHOLD = 0.75;
-    public static final double EUCLIDEAN_DISTANCE_THRESHOLD = 3;
 
     public static float[] standardize(float[] data) {
         double sum = 0;
@@ -97,36 +89,6 @@ public class AudioSimilarityDL {
     }
 
     /**
-     * 2. 从原始音频字节数据转换为模型输入
-     * 用于实时录音场景：将录音的 PCM 字节数据转为 16kHz 的 float 数组
-     *
-     * @param audioData  原始音频字节数据（PCM 格式）
-     * @param sampleRate 原始采样率
-     * @return 预处理后的 float 数组（16kHz）
-     */
-    public static float[] preprocessRawAudio(byte[] audioData, int sampleRate) {
-        if (audioData.length == 0) {
-            return new float[0];
-        }
-
-        // 如果是 16-bit PCM 数据
-        if (sampleRate != TARGET_SAMPLE_RATE || audioData.length % 2 != 0) {
-            // 需要重采样或数据长度为奇数，返回空数组
-            VoiceTrigger.LOGGER.warn("Sample rate mismatch: {} != {} or odd data length", sampleRate, TARGET_SAMPLE_RATE);
-            return new float[0];
-        }
-
-        // 将 16-bit PCM byte 转换为 float (范围 -1.0 到 1.0)
-        float[] floatArray = new float[audioData.length / 2];
-        ShortBuffer shortBuffer = ByteBuffer.wrap(audioData).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer();
-        for (int i = 0; i < floatArray.length; i++) {
-            floatArray[i] = shortBuffer.get(i) / 32768.0f; // 归一化
-        }
-
-        return floatArray;
-    }
-
-    /**
      * 2. 定义 DJL 翻译器 (将 float[] 转为模型需要的 NDArray，并将输出的 NDArray 转回 float[])
      */
     static class AudioTranslator implements NoBatchifyTranslator<float[], float[]> {
@@ -146,36 +108,6 @@ public class AudioSimilarityDL {
     }
 
     /**
-     * 3. 计算余弦相似度
-     *
-     * @param vectorA 向量 A
-     * @param vectorB 向量 B
-     * @return 余弦相似度（0-1 之间，越接近 1 越相似）
-     */
-    public static double cosineSimilarity(float[] vectorA, float[] vectorB) {
-        if (vectorA.length != vectorB.length) {
-            throw new IllegalArgumentException("向量维度不一致：" + vectorA.length + " vs " + vectorB.length);
-        }
-
-        double dotProduct = 0.0;
-        double normA = 0.0;
-        double normB = 0.0;
-
-        for (int i = 0; i < vectorA.length; i++) {
-            dotProduct += vectorA[i] * vectorB[i];
-            normA += Math.pow(vectorA[i], 2);
-            normB += Math.pow(vectorB[i], 2);
-        }
-
-        if (normA == 0 || normB == 0) return 0;
-
-        double similarity = dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
-
-        // 确保结果在 0-1 范围内
-        return Math.max(0.0, Math.min(1.0, similarity));
-    }
-
-    /**
      * 计算两个特征向量的余弦相似度
      * 因为 Python 模型末尾已经做了 L2 归一化，所以直接计算点积即为余弦相似度
      */
@@ -185,26 +117,6 @@ public class AudioSimilarityDL {
             dotProduct += feat1[i] * feat2[i];
         }
         return dotProduct;
-    }
-
-    /**
-     * 计算两个向量之间的欧氏距离
-     * 距离越小，表示两个音频特征在空间上越接近
-     */
-    public static double euclideanDistance(float[] vectorA, float[] vectorB) {
-        if (vectorA.length != vectorB.length) {
-            throw new IllegalArgumentException("向量维度不一致，无法计算欧氏距离");
-        }
-
-        double sum = 0.0;
-        for (int i = 0; i < vectorA.length; i++) {
-            // 计算每一维度的差值并求平方
-            double diff = (double) vectorA[i] - (double) vectorB[i];
-            sum += diff * diff;
-        }
-
-        // 最后开方
-        return Math.sqrt(sum);
     }
 
     /**
@@ -241,15 +153,5 @@ public class AudioSimilarityDL {
             VoiceTrigger.LOGGER.error("Failed to extract audio features", e);
             return null;
         }
-    }
-
-    /**
-     * 判断两个音频是否相似
-     *
-     * @param similarity 相似度分数
-     * @return 是否相似
-     */
-    public static boolean isSimilar(double similarity, double distance) {
-        return similarity >= SIMILARITY_THRESHOLD && distance <= EUCLIDEAN_DISTANCE_THRESHOLD;
     }
 }
