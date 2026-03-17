@@ -8,6 +8,8 @@
   "screen.voice_trigger.binding": "Voice Binding",
   "voice_trigger.configuration.buffer_size": "Buffer Size",
   "voice_trigger.configuration.buffer_size.tooltip": "Buffer size (bytes)",
+  "voice_trigger.configuration.continuous_monitoring": "Continuous Monitoring",
+  "voice_trigger.configuration.continuous_monitoring.tooltip": "Continuously monitor microphone input and trigger automatically",
   "voice_trigger.configuration.min_frames_for_match": "Min Frames For Match",
   "voice_trigger.configuration.min_frames_for_match.tooltip": "Minimum frame for match",
   "voice_trigger.configuration.section.voice_trigger.client.toml": "Voice Trigger Client Configuration",

@@ -8,6 +8,8 @@
   "screen.voice_trigger.binding": "ᵷuᴉpuᴉᗺ ǝɔᴉoɅ",
   "voice_trigger.configuration.buffer_size": "ǝzᴉS ɹǝɟɟnᗺ",
   "voice_trigger.configuration.buffer_size.tooltip": "(sǝʇʎq) ǝzᴉs ɹǝɟɟnᗺ",
+  "voice_trigger.configuration.continuous_monitoring": "ᵷuᴉɹoʇᴉuoW snonuᴉʇuoƆ",
+  "voice_trigger.configuration.continuous_monitoring.tooltip": "ʎꞁꞁɐɔᴉʇɐɯoʇnɐ ɹǝᵷᵷᴉɹʇ puɐ ʇnduᴉ ǝuoɥdoɹɔᴉɯ ɹoʇᴉuoɯ ʎꞁsnonuᴉʇuoƆ",
   "voice_trigger.configuration.min_frames_for_match": "ɥɔʇɐW ɹoℲ sǝɯɐɹℲ uᴉW",
   "voice_trigger.configuration.min_frames_for_match.tooltip": "ɥɔʇɐɯ ɹoɟ ǝɯɐɹɟ ɯnɯᴉuᴉW",
   "voice_trigger.configuration.section.voice_trigger.client.toml": "uoᴉʇɐɹnᵷᴉɟuoƆ ʇuǝᴉꞁƆ ɹǝᵷᵷᴉɹ⟘ ǝɔᴉoɅ",

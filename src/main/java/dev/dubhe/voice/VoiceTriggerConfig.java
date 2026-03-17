@@ -21,4 +21,12 @@ public class VoiceTriggerConfig {
     @Comment("Minimum frame for match")
     @BoundedDiscrete(min = 1, max = 16)
     public int minFramesForMatch = 3;
+
+    @Comment("Continuously monitor microphone input and trigger automatically")
+    public Mode continuousMonitoring = Mode.ON;
+
+    public enum Mode {
+        OFF,
+        ON
+    }
 }

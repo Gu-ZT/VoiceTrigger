@@ -149,9 +149,6 @@ public class VoiceRecorder {
         // 保存为 WAV 文件
         byte[] audioData = byteOutputStream.toByteArray();
 
-        // 移除开头和结尾的静音帧
-        byte[] trimmedAudioData = trimSilence(audioData);
-
         saveToWavFile(audioData);
     }
 
