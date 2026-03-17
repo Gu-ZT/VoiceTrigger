@@ -2,6 +2,7 @@ package dev.dubhe.voice.screen;
 
 import com.google.common.collect.ImmutableList;
 import dev.dubhe.voice.VoiceTrigger;
+import dev.dubhe.voice.audio.AudioPlayer;
 import dev.dubhe.voice.audio.VoiceListener;
 import dev.dubhe.voice.audio.VoiceProfileManager;
 import dev.dubhe.voice.audio.VoiceRecorder;
@@ -23,11 +24,13 @@ import net.neoforged.api.distmarker.OnlyIn;
 import org.apache.commons.lang3.ArrayUtils;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import javax.annotation.Nullable;
 import javax.sound.sampled.LineUnavailableException;
+import javax.sound.sampled.UnsupportedAudioFileException;
 
 public class VoiceBindsList extends ContainerObjectSelectionList<VoiceBindsList.Entry> {
     private static final int ITEM_HEIGHT = 20;
@@ -157,6 +160,7 @@ public class VoiceBindsList extends ContainerObjectSelectionList<VoiceBindsList.
         private static final Component RECORD_BUTTON_TITLE = Component.translatable("controls.record");
         private static final Component BOUND_BUTTON_TITLE = Component.translatable("controls.bound");
         private static final Component STOP_RECORDING_BUTTON_TITLE = Component.translatable("controls.stop_recording");
+        private static final Component STOP_PLAYING_BUTTON_TITLE = Component.translatable("controls.stop_playing");
         private static final Component RESET_BUTTON_TITLE = Component.translatable("controls.reset");
         private static final int PADDING = 10;
         private final KeyMapping key;
@@ -165,6 +169,7 @@ public class VoiceBindsList extends ContainerObjectSelectionList<VoiceBindsList.
         private final Button recordButton;
         private final Button resetButton;
         private VoiceRecorder recorder;
+        private AudioPlayer player;
         private boolean hasProfile = false;
 
         KeyEntry(KeyMapping key, Component name) {
@@ -189,11 +194,23 @@ public class VoiceBindsList extends ContainerObjectSelectionList<VoiceBindsList.
         }
 
         private void handleRecordButtonPress() {
+            // 如果正在播放，停止播放
+            if (player != null && player.isPlaying()) {
+                stopPlaying();
+                return;
+            }
+
+            // 如果正在录制，停止录制
             if (recorder != null && recorder.isRecording()) {
-                // 停止录制
                 stopRecording();
+                return;
+            }
+
+            // 如果已有语音绑定，播放音频
+            if (this.hasProfile) {
+                playAudio();
             } else {
-                // 开始录制
+                // 否则开始录制
                 startRecording();
             }
         }
@@ -289,17 +306,67 @@ public class VoiceBindsList extends ContainerObjectSelectionList<VoiceBindsList.
         }
 
         /**
+         * 播放已绑定的语音文件
+         */
+        private void playAudio() {
+            try {
+                File audioFile = VoiceProfileManager.getAudioFile(this.key);
+                if (!audioFile.exists()) {
+                    VoiceTrigger.LOGGER.warn("Audio file not found for key: {}", this.key.getName());
+                    return;
+                }
+
+                player = new AudioPlayer();
+                this.recordButton.setMessage(STOP_PLAYING_BUTTON_TITLE);
+
+                player.play(audioFile, () -> {
+                    // 播放完成回调，在主线程中更新UI
+                    VoiceBindsList.this.minecraft.execute(() -> {
+                        this.recordButton.setMessage(BOUND_BUTTON_TITLE);
+                        player = null;
+                    });
+                });
+
+                VoiceTrigger.LOGGER.info("Started playing audio for key: {}", this.key.getName());
+            } catch (UnsupportedAudioFileException | IOException | LineUnavailableException e) {
+                VoiceTrigger.LOGGER.error("Failed to play audio for key: {}", this.key.getName(), e);
+                this.recordButton.setMessage(BOUND_BUTTON_TITLE);
+                player = null;
+            }
+        }
+
+        /**
+         * 停止播放
+         */
+        private void stopPlaying() {
+            if (player == null || !player.isPlaying()) {
+                return;
+            }
+
+            player.stop();
+            this.recordButton.setMessage(BOUND_BUTTON_TITLE);
+            player = null;
+            VoiceTrigger.LOGGER.info("Stopped playing audio for key: {}", this.key.getName());
+        }
+
+        /**
          * 取消正在进行的录制并丢弃录音内容
          * 用于处理Screen关闭时的清理
          */
         public void cancelRecording() {
+            // 停止播放
+            if (player != null && player.isPlaying()) {
+                player.stop();
+                player = null;
+            }
+
             if (recorder == null || !recorder.isRecording()) {
                 return;
             }
 
             File audioFile = recorder.getOutputFile();
             recorder.stopRecording();
-            this.recordButton.setMessage(RECORD_BUTTON_TITLE);
+            this.recordButton.setMessage(hasProfile ? BOUND_BUTTON_TITLE : RECORD_BUTTON_TITLE);
             recorder = null;
 
             // 删除未完成的录音文件

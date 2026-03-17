@@ -12,6 +12,8 @@ public class LangHandler {
         provider.add("key.categories.voice_trigger", "VoiceTrigger");
         provider.add("controls.record", "Record");
         provider.add("controls.stop_recording", "Stop");
+        provider.add("controls.stop_playing", "Stop Playing");
+        provider.add("key.voice_trigger.voice_listen", "Voice Listen");
         provider.add("controls.bound", "Bound");
         provider.add("controls.reset", "Reset");
         provider.add("voice_trigger.recording_started", "Recording started...");
