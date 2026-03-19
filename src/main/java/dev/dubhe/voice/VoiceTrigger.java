@@ -9,6 +9,7 @@ import dev.dubhe.voice.audio.VoiceProfileManager;
 import dev.dubhe.voice.data.VoiceTriggerDatagen;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
@@ -27,7 +28,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-@Mod(VoiceTrigger.MOD_ID)
+@Mod(value = VoiceTrigger.MOD_ID, dist = Dist.CLIENT)
 public class VoiceTrigger {
     public static final String MOD_ID = "voice_trigger";
     public static final Logger LOGGER = LogUtils.getLogger();

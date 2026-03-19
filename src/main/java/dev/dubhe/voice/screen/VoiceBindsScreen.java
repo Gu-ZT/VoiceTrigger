@@ -13,6 +13,7 @@ import net.minecraft.client.gui.layouts.LinearLayout;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
+import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
@@ -21,7 +22,7 @@ import org.lwjgl.glfw.GLFW;
 
 import javax.annotation.Nullable;
 
-@EventBusSubscriber(modid = VoiceTrigger.MOD_ID)
+@EventBusSubscriber(modid = VoiceTrigger.MOD_ID, value = Dist.CLIENT)
 public class VoiceBindsScreen extends Screen {
     public static final KeyMapping VOICE_BINDING = new KeyMapping(
         "key.voice_trigger.voice_binding",
