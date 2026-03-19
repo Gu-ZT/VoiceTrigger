@@ -59,21 +59,13 @@ jobs:
         uses: actions/upload-artifact@v4.3.3
         with:
           name: "${{ steps.properties.outputs.mod_name }} ${{ steps.version.outputs.version }}"
-          path: build/libs/anvilcraft-neoforge-${{ steps.version.outputs.version }}.jar
-
-      - name: Publish to maven
-        run: ./gradlew publish
-        env:
-          MAVEN_URL: ${{ secrets.MAVEN_URL }}
-          MAVEN_USERNAME: ${{ secrets.MAVEN_USER }}
-          MAVEN_PASSWORD: ${{ secrets.MAVEN_PASS }}
-        continue-on-error: true
+          path: build/libs/voice_trigger-neoforge-${{ steps.version.outputs.version }}.jar
 
       - name: gametest
         uses: Anvil-Dev/dedicated-server-launch-test@1.21.1-neoforge
         continue-on-error: false
         with:
-          mod: build/libs/anvilcraft-neoforge-${{ steps.version.outputs.version }}.jar
+          mod: build/libs/voice_trigger-neoforge-${{ steps.version.outputs.version }}.jar
 
 #      - name: publish neoforge mc mod
 #        uses: Kir-Antipov/mc-publish@v3.3
@@ -95,5 +87,5 @@ jobs:
 #          curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
 #
 #          files: |
-#            build/libs/anvilcraft-neoforge-${{ steps.version.outputs.version }}.jar
-#            build/libs/anvilcraft-neoforge-${{ steps.version.outputs.version }}-sources.jar
+#            build/libs/voice_trigger-neoforge-${{ steps.version.outputs.version }}.jar
+#            build/libs/voice_trigger-neoforge-${{ steps.version.outputs.version }}-sources.jar
