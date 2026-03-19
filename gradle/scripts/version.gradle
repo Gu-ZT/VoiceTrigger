@@ -58,7 +58,7 @@ def getVersionType = {
 
 def getVersionPatch = { List paths ->
     if (grgit == null || grgit.head() == null) {
-        return 0
+        return getBuildNumber()
     }
 
     List latestCommits = paths.isEmpty() ? grgit.log() : grgit.log(paths: paths)

@@ -78,11 +78,11 @@ jobs:
 #          fail-mode: skip
 #          changelog: ${{ github.event.release.body }}
 #
-#          modrinth-id: vuISAWPc
+#          modrinth-id: wQuTUcJX
 #          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
 #          modrinth-featured: true
 #
-#          curseforge-id: 986251
+#          curseforge-id: 1489866
 #          curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
 #
 #          files: |

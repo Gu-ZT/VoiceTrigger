@@ -4,7 +4,18 @@ plugins {
     id 'idea'
     id 'net.neoforged.moddev' version '2.0.107'
     id 'io.freefair.lombok' version '8.7.1'
-    id 'org.ajoberstar.grgit' version'5.3.3'
+    id 'org.ajoberstar.grgit' version '5.3.3' apply false
+}
+
+def vcsVersionProp = findProperty("ow.build.vcsVersion")
+def configCacheRequested = gradle.startParameter.configurationCacheRequested
+def useVcsVersion = vcsVersionProp != null ? vcsVersionProp.toString().toBoolean() : (!configCacheRequested && System.getenv("GITHUB_ACTION") == null)
+
+if (useVcsVersion) {
+    apply plugin: 'org.ajoberstar.grgit'
+} else {
+    // Keep version.gradle safe when git-based versioning is disabled.
+    ext.grgit = null
 }
 
 apply from: "$rootDir/gradle/scripts/version.gradle"
