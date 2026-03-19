@@ -58,25 +58,25 @@ jobs:
           files: |
             build/libs/voice_trigger-neoforge-${{ steps.version.outputs.version }}.jar
 
-#      - name: publish neoforge mc mod
-#        uses: Kir-Antipov/mc-publish@v3.3
-#        continue-on-error: true
-#        with:
-#          name: "${{ steps.properties.outputs.mod_name }} For NeoForge v${{ steps.version.outputs.version }}"
-#          version: ${{ steps.version.outputs.version }}
-#          game-versions: 1.21.1
-#          version-type: ${{ env.VERSION_TYPE }}
-#          java: 21
-#          fail-mode: skip
-#          changelog: ${{ github.event.release.body }}
-#
-#          modrinth-id: wQuTUcJX
-#          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
-#          modrinth-featured: true
-#
-#          curseforge-id: 1489866
-#          curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
-#
-#          files: |
-#            build/libs/voice_trigger-neoforge-${{ steps.version.outputs.version }}.jar
-#            build/libs/voice_trigger-neoforge-${{ steps.version.outputs.version }}-sources.jar
+      - name: publish neoforge mc mod
+        uses: Kir-Antipov/mc-publish@v3.3
+        continue-on-error: true
+        with:
+          name: "${{ steps.properties.outputs.mod_name }} For NeoForge v${{ steps.version.outputs.version }}"
+          version: ${{ steps.version.outputs.version }}
+          game-versions: 1.21.1
+          version-type: ${{ env.VERSION_TYPE }}
+          java: 21
+          fail-mode: skip
+          changelog: ${{ github.event.release.body }}
+
+          modrinth-id: wQuTUcJX
+          modrinth-token: ${{ secrets.MODRINTH_TOKEN }}
+          modrinth-featured: true
+
+          curseforge-id: 1489866
+          curseforge-token: ${{ secrets.CURSEFORGE_TOKEN }}
+
+          files: |
+            build/libs/voice_trigger-neoforge-${{ steps.version.outputs.version }}.jar
+            build/libs/voice_trigger-neoforge-${{ steps.version.outputs.version }}-sources.jar
